@@ -3,13 +3,23 @@
 ## Summary
 Allow users to save a personal rating value on each game entry.
 
+## Labels
+- `phase-1`
+- `enhancement`
+- `backend`
+
+## Dependencies
+- Depends on #001
+
 ## Background
 Personal ratings are part of the MVP feature set and game card display.
 
 ## Acceptance Criteria
-- [ ] A rating field is available when editing a game
-- [ ] Rating data is stored as post meta
-- [ ] Rating can be surfaced in game card/single displays
+- [ ] `_user_rating` is available/editable as part of game entry management
+- [ ] Rating supports the PRD model (`1–10` or `1–5 stars`) with validation of allowed values
+- [ ] Rating value is persisted as post meta and returned in REST/editor contexts
+- [ ] Rating appears in game card and single game displays
 
 ## Reference
-- `readme.md` → **Phase 1 (MVP)**
+- `readme.md` → **Section 5.1: Data Model**
+- `readme.md` → **Section 6: Phase 1 (MVP)**

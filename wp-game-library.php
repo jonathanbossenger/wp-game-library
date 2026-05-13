@@ -77,17 +77,13 @@ add_action( 'init', 'wp_game_library_register_game_post_type' );
  * @return mixed
  */
 function wp_game_library_sanitize_game_meta( $value, $meta_key = '' ) {
-	if ( '' === $meta_key ) {
-		return sanitize_text_field( (string) $value );
-	}
-
 	switch ( $meta_key ) {
 		case '_igdb_id':
-			return is_numeric( $value ) ? absint( $value ) : 0;
+			return is_numeric( $value ) ? absint( $value ) : '';
 
 		case '_game_rating':
 		case '_user_rating':
-			return is_numeric( $value ) ? (float) $value : 0;
+			return is_numeric( $value ) ? (float) $value : '';
 
 		case '_game_cover_url':
 			return esc_url_raw( $value );
@@ -111,7 +107,7 @@ function wp_game_library_sanitize_game_meta( $value, $meta_key = '' ) {
 			return sanitize_text_field( (string) $value );
 
 		default:
-			return '';
+			return sanitize_text_field( (string) $value );
 	}
 }
 

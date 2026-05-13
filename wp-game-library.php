@@ -77,7 +77,7 @@ add_action( 'init', 'wp_game_library_register_game_post_type' );
  * @return mixed
  */
 function wp_game_library_sanitize_game_meta( $value, $meta_key ) {
-	if ( in_array( $meta_key, array( '_igdb_id' ), true ) ) {
+	if ( '_igdb_id' === $meta_key ) {
 		return absint( $value );
 	}
 
@@ -90,6 +90,28 @@ function wp_game_library_sanitize_game_meta( $value, $meta_key ) {
 	}
 
 	return sanitize_text_field( (string) $value );
+}
+
+/**
+ * Authorize updates to game meta values.
+ *
+ * @param bool   $allowed  Whether the user can add the meta.
+ * @param string $meta_key The meta key.
+ * @param int    $post_id  Post ID.
+ * @param int    $user_id  User ID.
+ *
+ * @return bool
+ */
+function wp_game_library_auth_game_meta( $allowed, $meta_key, $post_id, $user_id ) {
+	if ( empty( $post_id ) ) {
+		return user_can( $user_id, 'edit_posts' );
+	}
+
+	if ( 'game' !== get_post_type( $post_id ) ) {
+		return false;
+	}
+
+	return user_can( $user_id, 'edit_post', $post_id );
 }
 
 /**
@@ -125,9 +147,7 @@ function wp_game_library_register_game_meta() {
 				'single'            => true,
 				'show_in_rest'      => true,
 				'sanitize_callback' => 'wp_game_library_sanitize_game_meta',
-				'auth_callback'     => static function() {
-					return current_user_can( 'edit_posts' );
-				},
+				'auth_callback'     => 'wp_game_library_auth_game_meta',
 			)
 		);
 	}

@@ -77,19 +77,33 @@ add_action( 'init', 'wp_game_library_register_game_post_type' );
  * @return mixed
  */
 function wp_game_library_sanitize_game_meta( $value, $meta_key ) {
-	if ( '_igdb_id' === $meta_key ) {
-		return absint( $value );
-	}
+	switch ( $meta_key ) {
+		case '_igdb_id':
+			return absint( $value );
 
-	if ( in_array( $meta_key, array( '_game_rating', '_user_rating' ), true ) ) {
-		return (float) $value;
-	}
+		case '_game_rating':
+		case '_user_rating':
+			return is_numeric( $value ) ? (float) $value : 0.0;
 
-	if ( '_game_cover_url' === $meta_key ) {
-		return esc_url_raw( $value );
-	}
+		case '_game_cover_url':
+			return esc_url_raw( $value );
 
-	return sanitize_text_field( (string) $value );
+		case '_igdb_slug':
+		case '_game_summary':
+		case '_game_release_date':
+		case '_game_developers':
+		case '_game_publishers':
+		case '_game_genres':
+		case '_user_play_status':
+		case '_user_notes':
+		case '_user_date_added':
+		case '_user_date_completed':
+		case '_user_ownership':
+			return sanitize_text_field( (string) $value );
+
+		default:
+			return '';
+	}
 }
 
 /**

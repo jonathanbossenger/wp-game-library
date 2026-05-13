@@ -76,7 +76,11 @@ add_action( 'init', 'wp_game_library_register_game_post_type' );
  *
  * @return mixed
  */
-function wp_game_library_sanitize_game_meta( $value, $meta_key ) {
+function wp_game_library_sanitize_game_meta( $value, $meta_key = '' ) {
+	if ( '' === $meta_key ) {
+		return sanitize_text_field( (string) $value );
+	}
+
 	switch ( $meta_key ) {
 		case '_igdb_id':
 			return is_numeric( $value ) ? absint( $value ) : 0;
@@ -92,7 +96,7 @@ function wp_game_library_sanitize_game_meta( $value, $meta_key ) {
 		case '_user_date_added':
 		case '_user_date_completed':
 			$timestamp = strtotime( (string) $value );
-			return $timestamp ? gmdate( 'Y-m-d', $timestamp ) : '';
+			return false !== $timestamp ? gmdate( 'Y-m-d', $timestamp ) : '';
 
 		case '_game_summary':
 		case '_user_notes':
@@ -171,9 +175,7 @@ function wp_game_library_register_game_meta() {
 				'type'              => $meta_args['type'],
 				'single'            => true,
 				'show_in_rest'      => true,
-				'sanitize_callback' => static function( $value ) use ( $meta_key ) {
-					return wp_game_library_sanitize_game_meta( $value, $meta_key );
-				},
+				'sanitize_callback' => 'wp_game_library_sanitize_game_meta',
 				'auth_callback'     => 'wp_game_library_auth_game_meta',
 			)
 		);

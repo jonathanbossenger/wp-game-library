@@ -72,11 +72,13 @@ add_action( 'init', 'wp_game_library_register_game_post_type' );
  * Sanitize game meta values before storage.
  *
  * @param mixed  $value    Meta value.
- * @param string $meta_key Meta key.
+ * @param string $meta_key       Meta key.
+ * @param string $object_type    Object type.
+ * @param string $object_subtype Object subtype.
  *
  * @return mixed
  */
-function wp_game_library_sanitize_game_meta( $value, $meta_key = '' ) {
+function wp_game_library_sanitize_game_meta( $value, $meta_key = '', $object_type = '', $object_subtype = '' ) {
 	switch ( $meta_key ) {
 		case '_igdb_id':
 			return is_numeric( $value ) ? absint( $value ) : 0;

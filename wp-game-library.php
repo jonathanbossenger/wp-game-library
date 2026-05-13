@@ -61,7 +61,7 @@ function wp_game_library_register_game_post_type() {
 		'capability_type'    => 'post',
 		'map_meta_cap'       => true,
 		'menu_position'      => 20,
-		'menu_icon'          => 'dashicons-games',
+		'menu_icon'          => 'dashicons-gamepad',
 	);
 
 	register_post_type( 'game', $args );
@@ -202,7 +202,9 @@ function wp_game_library_register_game_meta() {
 				'type'              => $meta_args['type'],
 				'single'            => true,
 				'show_in_rest'      => true,
-				'sanitize_callback' => 'wp_game_library_sanitize_game_meta',
+				'sanitize_callback' => static function( $value ) use ( $meta_key ) {
+					return wp_game_library_sanitize_game_meta( $value, $meta_key );
+				},
 				'auth_callback'     => 'wp_game_library_auth_game_meta',
 			)
 		);

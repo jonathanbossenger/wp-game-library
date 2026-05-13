@@ -79,11 +79,11 @@ add_action( 'init', 'wp_game_library_register_game_post_type' );
 function wp_game_library_sanitize_game_meta( $value, $meta_key = '' ) {
 	switch ( $meta_key ) {
 		case '_igdb_id':
-			return is_numeric( $value ) ? absint( $value ) : '';
+			return is_numeric( $value ) ? absint( $value ) : 0;
 
 		case '_game_rating':
 		case '_user_rating':
-			return is_numeric( $value ) ? (float) $value : '';
+			return is_numeric( $value ) ? (float) $value : 0.0;
 
 		case '_game_cover_url':
 			return esc_url_raw( $value );
@@ -91,8 +91,37 @@ function wp_game_library_sanitize_game_meta( $value, $meta_key = '' ) {
 		case '_game_release_date':
 		case '_user_date_added':
 		case '_user_date_completed':
-			$timestamp = strtotime( (string) $value );
-			return false !== $timestamp ? gmdate( 'Y-m-d', $timestamp ) : '';
+			$raw_date = trim( (string) $value );
+
+			if ( preg_match( '/^\d{4}-\d{2}-\d{2}$/', $raw_date ) ) {
+				$parts = explode( '-', $raw_date );
+				$year  = (int) $parts[0];
+
+				if ( checkdate( (int) $parts[1], (int) $parts[2], $year ) && $year >= 1950 && $year <= 2100 ) {
+					return $raw_date;
+				}
+			}
+
+			$date_formats = array(
+				'Y-m-d\TH:i:sP',
+				'Y-m-d H:i:s',
+			);
+
+			foreach ( $date_formats as $date_format ) {
+				$date_time = DateTimeImmutable::createFromFormat( $date_format, $raw_date );
+
+				if ( false === $date_time ) {
+					continue;
+				}
+
+				$year = (int) $date_time->format( 'Y' );
+
+				if ( $year >= 1950 && $year <= 2100 ) {
+					return $date_time->format( 'Y-m-d' );
+				}
+			}
+
+			return '';
 
 		case '_game_summary':
 		case '_user_notes':

@@ -88,16 +88,21 @@ function wp_game_library_sanitize_game_meta( $value, $meta_key ) {
 		case '_game_cover_url':
 			return esc_url_raw( $value );
 
-		case '_igdb_slug':
-		case '_game_summary':
 		case '_game_release_date':
+		case '_user_date_added':
+		case '_user_date_completed':
+			$timestamp = strtotime( (string) $value );
+			return $timestamp ? gmdate( 'Y-m-d', $timestamp ) : '';
+
+		case '_game_summary':
+		case '_user_notes':
+			return sanitize_textarea_field( (string) $value );
+
+		case '_igdb_slug':
 		case '_game_developers':
 		case '_game_publishers':
 		case '_game_genres':
 		case '_user_play_status':
-		case '_user_notes':
-		case '_user_date_added':
-		case '_user_date_completed':
 		case '_user_ownership':
 			return sanitize_text_field( (string) $value );
 
@@ -117,6 +122,8 @@ function wp_game_library_sanitize_game_meta( $value, $meta_key ) {
  * @return bool
  */
 function wp_game_library_auth_game_meta( $allowed, $meta_key, $post_id, $user_id ) {
+	unset( $allowed, $meta_key );
+
 	if ( empty( $post_id ) ) {
 		return user_can( $user_id, 'edit_posts' );
 	}
@@ -160,7 +167,9 @@ function wp_game_library_register_game_meta() {
 				'type'              => $meta_args['type'],
 				'single'            => true,
 				'show_in_rest'      => true,
-				'sanitize_callback' => 'wp_game_library_sanitize_game_meta',
+				'sanitize_callback' => static function( $value ) use ( $meta_key ) {
+					return wp_game_library_sanitize_game_meta( $value, $meta_key );
+				},
 				'auth_callback'     => 'wp_game_library_auth_game_meta',
 			)
 		);

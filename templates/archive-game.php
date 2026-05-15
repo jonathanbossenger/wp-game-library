@@ -110,16 +110,14 @@ if ( ! isset( $sort_options[ $active_sort ] ) ) {
 				$cover_url  = get_post_meta( $post_id, '_game_cover_url', true );
 				$summary    = get_post_meta( $post_id, '_game_summary', true );
 				$user_rating = get_post_meta( $post_id, '_user_rating', true );
-				$status     = get_post_meta( $post_id, '_user_play_status', true );
+				$status     = '';
 
 				$platform_names = wp_get_post_terms( $post_id, 'game_platform', array( 'fields' => 'names' ) );
 				$platforms      = ! is_wp_error( $platform_names ) ? implode( ', ', $platform_names ) : '';
 
-				if ( empty( $status ) ) {
-					$status_terms = wp_get_post_terms( $post_id, 'game_status', array( 'fields' => 'names' ) );
-					if ( ! is_wp_error( $status_terms ) && ! empty( $status_terms[0] ) ) {
-						$status = $status_terms[0];
-					}
+				$status_terms = wp_get_post_terms( $post_id, 'game_status', array( 'fields' => 'names' ) );
+				if ( ! is_wp_error( $status_terms ) && ! empty( $status_terms[0] ) ) {
+					$status = $status_terms[0];
 				}
 
 				if ( empty( $summary ) ) {

@@ -1339,7 +1339,7 @@ function wp_game_library_filter_game_archive_query( $query ) {
 	foreach ( $tax_map as $taxonomy => $query_key ) {
 		$term_slug = isset( $_GET[ $query_key ] ) ? sanitize_title( wp_unslash( $_GET[ $query_key ] ) ) : '';
 
-		if ( '' === $term_slug || ! taxonomy_exists( $taxonomy ) || ! term_exists( $term_slug, $taxonomy ) ) {
+		if ( '' === $term_slug || ! taxonomy_exists( $taxonomy ) ) {
 			continue;
 		}
 
@@ -1373,15 +1373,53 @@ function wp_game_library_filter_game_archive_query( $query ) {
 			break;
 
 		case 'rating_desc':
-			$query->set( 'meta_key', '_user_rating' );
-			$query->set( 'orderby', 'meta_value_num' );
-			$query->set( 'order', 'DESC' );
+			$query->set(
+				'meta_query',
+				array(
+					'relation'       => 'OR',
+					'rating_clause'  => array(
+						'key'     => '_user_rating',
+						'compare' => 'EXISTS',
+						'type'    => 'NUMERIC',
+					),
+					'rating_missing' => array(
+						'key'     => '_user_rating',
+						'compare' => 'NOT EXISTS',
+					),
+				)
+			);
+			$query->set(
+				'orderby',
+				array(
+					'rating_clause' => 'DESC',
+					'date'          => 'DESC',
+				)
+			);
 			break;
 
 		case 'rating_asc':
-			$query->set( 'meta_key', '_user_rating' );
-			$query->set( 'orderby', 'meta_value_num' );
-			$query->set( 'order', 'ASC' );
+			$query->set(
+				'meta_query',
+				array(
+					'relation'       => 'OR',
+					'rating_clause'  => array(
+						'key'     => '_user_rating',
+						'compare' => 'EXISTS',
+						'type'    => 'NUMERIC',
+					),
+					'rating_missing' => array(
+						'key'     => '_user_rating',
+						'compare' => 'NOT EXISTS',
+					),
+				)
+			);
+			$query->set(
+				'orderby',
+				array(
+					'rating_clause' => 'ASC',
+					'date'          => 'DESC',
+				)
+			);
 			break;
 
 		case 'date_desc':

@@ -882,7 +882,13 @@ function wp_game_library_register_rest_routes() {
 			'methods'             => WP_REST_Server::CREATABLE,
 			'callback'            => 'wp_game_library_rest_import_game',
 			'permission_callback' => static function () {
-				return current_user_can( 'publish_posts' );
+				$post_type = get_post_type_object( 'game' );
+
+				if ( ! $post_type || empty( $post_type->cap->create_posts ) ) {
+					return false;
+				}
+
+				return current_user_can( $post_type->cap->create_posts );
 			},
 			'args'                => array(
 				'igdb_id' => array(
@@ -961,6 +967,10 @@ function wp_game_library_rest_import_game( WP_REST_Request $request ) {
 
 	$mapped = wp_game_library_igdb_map_game_data( $igdb_data );
 
+	if ( empty( $post_id ) ) {
+		$post_id = wp_game_library_find_game_post_by_igdb_id( $igdb_id );
+	}
+
 	if ( ! empty( $post_id ) ) {
 		$post_id = absint( $post_id );
 
@@ -979,28 +989,84 @@ function wp_game_library_rest_import_game( WP_REST_Request $request ) {
 				array( 'status' => 403 )
 			);
 		}
-
-		wp_game_library_igdb_cache_game_data( $post_id, $igdb_data );
-
-		// Update the post title when the post is still a draft.
-		$post = get_post( $post_id );
-		if ( $post && 'auto-draft' === $post->post_status && ! empty( $igdb_data['name'] ) ) {
-			wp_update_post(
-				array(
-					'ID'         => $post_id,
-					'post_title' => sanitize_text_field( $igdb_data['name'] ),
-					'post_name'  => sanitize_title( $igdb_data['name'] ),
-				)
+	} else {
+		$post_title = ! empty( $igdb_data['name'] )
+			? sanitize_text_field( $igdb_data['name'] )
+			: sprintf(
+				/* translators: %d: IGDB game ID */
+				__( 'IGDB Game %d', 'wp-game-library' ),
+				$igdb_id
 			);
+
+		$post_id = wp_insert_post(
+			array(
+				'post_type'   => 'game',
+				'post_status' => 'draft',
+				'post_title'  => $post_title,
+				'post_name'   => sanitize_title( $post_title ),
+			),
+			true
+		);
+
+		if ( is_wp_error( $post_id ) ) {
+			return $post_id;
 		}
+	}
+
+	wp_game_library_igdb_cache_game_data( $post_id, $igdb_data );
+
+	// Update the post title when the post is still a draft.
+	$post = get_post( $post_id );
+	if ( $post && 'auto-draft' === $post->post_status && ! empty( $igdb_data['name'] ) ) {
+		wp_update_post(
+			array(
+				'ID'         => $post_id,
+				'post_title' => sanitize_text_field( $igdb_data['name'] ),
+				'post_name'  => sanitize_title( $igdb_data['name'] ),
+			)
+		);
 	}
 
 	return rest_ensure_response(
 		array_merge(
 			$mapped,
-			array( 'name' => isset( $igdb_data['name'] ) ? $igdb_data['name'] : '' )
+			array(
+				'post_id' => (int) $post_id,
+				'name'    => isset( $igdb_data['name'] ) ? $igdb_data['name'] : '',
+			)
 		)
 	);
+}
+
+/**
+ * Find a game post ID by IGDB ID.
+ *
+ * @param int $igdb_id IGDB game ID.
+ *
+ * @return int Matching game post ID or 0 when not found.
+ */
+function wp_game_library_find_game_post_by_igdb_id( $igdb_id ) {
+	$query = new WP_Query(
+		array(
+			'post_type'      => 'game',
+			'post_status'    => array( 'publish', 'future', 'draft', 'pending', 'private' ),
+			'fields'         => 'ids',
+			'posts_per_page' => 1,
+			'meta_query'     => array(
+				array(
+					'key'   => '_igdb_id',
+					'value' => absint( $igdb_id ),
+				),
+			),
+			'no_found_rows'  => true,
+		)
+	);
+
+	if ( empty( $query->posts[0] ) ) {
+		return 0;
+	}
+
+	return (int) $query->posts[0];
 }
 
 // ============================================================
@@ -1129,3 +1195,120 @@ function wp_game_library_enqueue_igdb_admin_script( $hook ) {
 	);
 }
 add_action( 'admin_enqueue_scripts', 'wp_game_library_enqueue_igdb_admin_script' );
+
+/**
+ * Register the Game Card Gutenberg block.
+ *
+ * @return void
+ */
+function wp_game_library_register_game_card_block() {
+	wp_register_script(
+		'wp-game-library-game-card-block',
+		plugin_dir_url( __FILE__ ) . 'assets/js/game-card-block.js',
+		array( 'wp-api-fetch', 'wp-block-editor', 'wp-blocks', 'wp-components', 'wp-element', 'wp-i18n', 'wp-server-side-render' ),
+		WP_GAME_LIBRARY_VERSION,
+		true
+	);
+
+	register_block_type(
+		'wp-game-library/game-card',
+		array(
+			'editor_script'   => 'wp-game-library-game-card-block',
+			'render_callback' => 'wp_game_library_render_game_card_block',
+			'attributes'      => array(
+				'gamePostId' => array(
+					'type'    => 'integer',
+					'default' => 0,
+				),
+				'gameTitle'  => array(
+					'type'    => 'string',
+					'default' => '',
+				),
+				'variation'  => array(
+					'type'    => 'string',
+					'default' => 'full',
+				),
+			),
+			'supports'        => array(
+				'html' => false,
+			),
+		)
+	);
+}
+add_action( 'init', 'wp_game_library_register_game_card_block', 20 );
+
+/**
+ * Render callback for the Game Card block.
+ *
+ * @param array  $attributes Block attributes.
+ * @param string $content    Serialized inner blocks content.
+ *
+ * @return string
+ */
+function wp_game_library_render_game_card_block( $attributes, $content ) {
+	$post_id = isset( $attributes['gamePostId'] ) ? absint( $attributes['gamePostId'] ) : 0;
+
+	if ( ! $post_id || 'game' !== get_post_type( $post_id ) ) {
+		return '<div class="wp-game-library-game-card-placeholder">' . esc_html__( 'Select a game to display a game card.', 'wp-game-library' ) . '</div>';
+	}
+
+	$variation = ( isset( $attributes['variation'] ) && 'compact' === $attributes['variation'] ) ? 'compact' : 'full';
+	$title     = get_the_title( $post_id );
+	$cover_url = get_post_meta( $post_id, '_game_cover_url', true );
+	$summary   = get_post_meta( $post_id, '_game_summary', true );
+	$status    = get_post_meta( $post_id, '_user_play_status', true );
+	$rating    = get_post_meta( $post_id, '_user_rating', true );
+
+	$platform_names = wp_get_post_terms( $post_id, 'game_platform', array( 'fields' => 'names' ) );
+	$platforms      = ! is_wp_error( $platform_names ) ? implode( ', ', $platform_names ) : '';
+
+	if ( empty( $status ) ) {
+		$status_names = wp_get_post_terms( $post_id, 'game_status', array( 'fields' => 'names' ) );
+		if ( ! is_wp_error( $status_names ) && ! empty( $status_names[0] ) ) {
+			$status = $status_names[0];
+		}
+	}
+
+	$inner_content = '';
+	if ( ! empty( $content ) ) {
+		$inner_content = $content;
+	}
+
+	ob_start();
+	?>
+	<article class="wp-block-wp-game-library-game-card wp-game-library-game-card is-variation-<?php echo esc_attr( $variation ); ?>">
+		<?php if ( ! empty( $cover_url ) ) : ?>
+		<div class="wp-game-library-game-card__cover">
+			<img src="<?php echo esc_url( $cover_url ); ?>" alt="<?php echo esc_attr( sprintf( __( 'Cover art for %s', 'wp-game-library' ), $title ) ); ?>" loading="lazy" />
+		</div>
+		<?php endif; ?>
+		<div class="wp-game-library-game-card__content">
+			<h3 class="wp-game-library-game-card__title"><?php echo esc_html( $title ); ?></h3>
+			<?php if ( ! empty( $platforms ) ) : ?>
+			<p class="wp-game-library-game-card__platforms"><?php echo esc_html( $platforms ); ?></p>
+			<?php endif; ?>
+			<?php if ( ! empty( $status ) ) : ?>
+			<p class="wp-game-library-game-card__status"><?php echo esc_html( $status ); ?></p>
+			<?php endif; ?>
+			<?php if ( '' !== $rating && null !== $rating ) : ?>
+			<p class="wp-game-library-game-card__rating">
+				<?php
+				printf(
+					/* translators: %s: User rating */
+					esc_html__( 'User rating: %s', 'wp-game-library' ),
+					esc_html( number_format_i18n( (float) $rating, 1 ) )
+				);
+				?>
+			</p>
+			<?php endif; ?>
+			<?php if ( 'full' === $variation && ! empty( $summary ) ) : ?>
+			<p class="wp-game-library-game-card__summary"><?php echo esc_html( $summary ); ?></p>
+			<?php endif; ?>
+			<?php if ( ! empty( $inner_content ) ) : ?>
+			<div class="wp-game-library-game-card__inner-content"><?php echo wp_kses_post( $inner_content ); ?></div>
+			<?php endif; ?>
+		</div>
+	</article>
+	<?php
+	return (string) ob_get_clean();
+}

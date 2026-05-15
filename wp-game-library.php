@@ -1312,3 +1312,124 @@ function wp_game_library_render_game_card_block( $attributes, $content ) {
 	<?php
 	return (string) ob_get_clean();
 }
+
+/**
+ * Apply filtering, sorting, and pagination defaults to the game archive.
+ *
+ * @param WP_Query $query Query object.
+ *
+ * @return void
+ */
+function wp_game_library_filter_game_archive_query( $query ) {
+	if ( is_admin() || ! $query->is_main_query() || ! $query->is_post_type_archive( 'game' ) ) {
+		return;
+	}
+
+	$query->set( 'post_status', 'publish' );
+	$query->set( 'posts_per_page', 12 );
+
+	$tax_map   = array(
+		'game_status'     => 'status',
+		'game_platform'   => 'platform',
+		'game_genre'      => 'genre',
+		'game_collection' => 'collection',
+	);
+	$tax_query = array();
+
+	foreach ( $tax_map as $taxonomy => $query_key ) {
+		$term_slug = isset( $_GET[ $query_key ] ) ? sanitize_title( wp_unslash( $_GET[ $query_key ] ) ) : '';
+
+		if ( '' === $term_slug || ! taxonomy_exists( $taxonomy ) || ! term_exists( $term_slug, $taxonomy ) ) {
+			continue;
+		}
+
+		$tax_query[] = array(
+			'taxonomy' => $taxonomy,
+			'field'    => 'slug',
+			'terms'    => $term_slug,
+		);
+	}
+
+	if ( ! empty( $tax_query ) ) {
+		$query->set( 'tax_query', $tax_query );
+	}
+
+	$sort = isset( $_GET['sort'] ) ? sanitize_key( wp_unslash( $_GET['sort'] ) ) : 'date_desc';
+
+	switch ( $sort ) {
+		case 'title_asc':
+			$query->set( 'orderby', 'title' );
+			$query->set( 'order', 'ASC' );
+			break;
+
+		case 'title_desc':
+			$query->set( 'orderby', 'title' );
+			$query->set( 'order', 'DESC' );
+			break;
+
+		case 'date_asc':
+			$query->set( 'orderby', 'date' );
+			$query->set( 'order', 'ASC' );
+			break;
+
+		case 'rating_desc':
+			$query->set( 'meta_key', '_user_rating' );
+			$query->set( 'orderby', 'meta_value_num' );
+			$query->set( 'order', 'DESC' );
+			break;
+
+		case 'rating_asc':
+			$query->set( 'meta_key', '_user_rating' );
+			$query->set( 'orderby', 'meta_value_num' );
+			$query->set( 'order', 'ASC' );
+			break;
+
+		case 'date_desc':
+		default:
+			$query->set( 'orderby', 'date' );
+			$query->set( 'order', 'DESC' );
+			break;
+	}
+}
+add_action( 'pre_get_posts', 'wp_game_library_filter_game_archive_query' );
+
+/**
+ * Enqueue front-end assets for the game archive.
+ *
+ * @return void
+ */
+function wp_game_library_enqueue_archive_assets() {
+	if ( ! is_post_type_archive( 'game' ) ) {
+		return;
+	}
+
+	wp_enqueue_style(
+		'wp-game-library-archive',
+		plugin_dir_url( __FILE__ ) . 'assets/css/game-archive.css',
+		array(),
+		WP_GAME_LIBRARY_VERSION
+	);
+}
+add_action( 'wp_enqueue_scripts', 'wp_game_library_enqueue_archive_assets' );
+
+/**
+ * Use plugin template for the game archive.
+ *
+ * @param string $template Resolved template path.
+ *
+ * @return string
+ */
+function wp_game_library_game_archive_template( $template ) {
+	if ( ! is_post_type_archive( 'game' ) ) {
+		return $template;
+	}
+
+	$archive_template = plugin_dir_path( __FILE__ ) . 'templates/archive-game.php';
+
+	if ( file_exists( $archive_template ) ) {
+		return $archive_template;
+	}
+
+	return $template;
+}
+add_filter( 'template_include', 'wp_game_library_game_archive_template' );

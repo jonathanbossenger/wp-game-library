@@ -1,0 +1,87 @@
+.wp-game-library-archive {
+	max-width: 1200px;
+	margin: 0 auto;
+	padding: 1.5rem;
+}
+
+.wp-game-library-archive__filters {
+	display: grid;
+	gap: 0.75rem;
+	grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+	align-items: end;
+	margin-bottom: 1.5rem;
+}
+
+.wp-game-library-archive__filters label {
+	display: block;
+	font-weight: 600;
+	font-size: 0.9rem;
+	margin-bottom: 0.25rem;
+}
+
+.wp-game-library-archive__filters select,
+.wp-game-library-archive__filters button {
+	width: 100%;
+	min-height: 2.5rem;
+}
+
+.wp-game-library-archive__filters .wp-game-library-archive__reset {
+	align-self: center;
+	display: inline-block;
+	padding: 0.4rem 0;
+	text-align: center;
+}
+
+.wp-game-library-archive__grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+	gap: 1rem;
+}
+
+.wp-game-library-game-card {
+	border: 1px solid rgba(0, 0, 0, 0.12);
+	border-radius: 8px;
+	overflow: hidden;
+	background: #fff;
+}
+
+.wp-game-library-game-card__cover img {
+	display: block;
+	width: 100%;
+	height: auto;
+}
+
+.wp-game-library-game-card__content {
+	padding: 1rem;
+}
+
+.wp-game-library-game-card__title {
+	margin: 0 0 0.5rem;
+	font-size: 1.15rem;
+}
+
+.wp-game-library-game-card__title a {
+	text-decoration: none;
+}
+
+.wp-game-library-game-card__platforms,
+.wp-game-library-game-card__status,
+.wp-game-library-game-card__rating,
+.wp-game-library-game-card__summary {
+	margin: 0 0 0.5rem;
+}
+
+.wp-game-library-archive__empty-state {
+	padding: 1.25rem;
+	border: 1px dashed rgba(0, 0, 0, 0.25);
+	border-radius: 8px;
+}
+
+.wp-game-library-archive .page-numbers {
+	margin-top: 1.5rem;
+	padding-left: 0;
+	list-style: none;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+}

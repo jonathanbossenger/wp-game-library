@@ -882,30 +882,6 @@ function wp_game_library_register_rest_routes() {
 			'methods'             => WP_REST_Server::CREATABLE,
 			'callback'            => 'wp_game_library_rest_import_game',
 			'permission_callback' => static function () {
-				return current_user_can( 'publish_posts' );
-			},
-			'args'                => array(
-				'igdb_id' => array(
-					'required' => true,
-					'type'     => 'integer',
-					'minimum'  => 1,
-				),
-				'post_id' => array(
-					'required' => false,
-					'type'     => 'integer',
-					'minimum'  => 1,
-				),
-			),
-		)
-	);
-
-	register_rest_route(
-		'wp-game-library/v1',
-		'/games/import-to-library',
-		array(
-			'methods'             => WP_REST_Server::CREATABLE,
-			'callback'            => 'wp_game_library_rest_import_game_to_library',
-			'permission_callback' => static function () {
 				$post_type = get_post_type_object( 'game' );
 
 				if ( ! $post_type || empty( $post_type->cap->create_posts ) ) {
@@ -917,6 +893,11 @@ function wp_game_library_register_rest_routes() {
 			'args'                => array(
 				'igdb_id' => array(
 					'required' => true,
+					'type'     => 'integer',
+					'minimum'  => 1,
+				),
+				'post_id' => array(
+					'required' => false,
 					'type'     => 'integer',
 					'minimum'  => 1,
 				),
@@ -986,6 +967,10 @@ function wp_game_library_rest_import_game( WP_REST_Request $request ) {
 
 	$mapped = wp_game_library_igdb_map_game_data( $igdb_data );
 
+	if ( empty( $post_id ) ) {
+		$post_id = wp_game_library_find_game_post_by_igdb_id( $igdb_id );
+	}
+
 	if ( ! empty( $post_id ) ) {
 		$post_id = absint( $post_id );
 
@@ -1004,26 +989,51 @@ function wp_game_library_rest_import_game( WP_REST_Request $request ) {
 				array( 'status' => 403 )
 			);
 		}
-
-		wp_game_library_igdb_cache_game_data( $post_id, $igdb_data );
-
-		// Update the post title when the post is still a draft.
-		$post = get_post( $post_id );
-		if ( $post && 'auto-draft' === $post->post_status && ! empty( $igdb_data['name'] ) ) {
-			wp_update_post(
-				array(
-					'ID'         => $post_id,
-					'post_title' => sanitize_text_field( $igdb_data['name'] ),
-					'post_name'  => sanitize_title( $igdb_data['name'] ),
-				)
+	} else {
+		$post_title = ! empty( $igdb_data['name'] )
+			? sanitize_text_field( $igdb_data['name'] )
+			: sprintf(
+				/* translators: %d: IGDB game ID */
+				__( 'IGDB Game %d', 'wp-game-library' ),
+				$igdb_id
 			);
+
+		$post_id = wp_insert_post(
+			array(
+				'post_type'   => 'game',
+				'post_status' => 'draft',
+				'post_title'  => $post_title,
+				'post_name'   => sanitize_title( $post_title ),
+			),
+			true
+		);
+
+		if ( is_wp_error( $post_id ) ) {
+			return $post_id;
 		}
+	}
+
+	wp_game_library_igdb_cache_game_data( $post_id, $igdb_data );
+
+	// Update the post title when the post is still a draft.
+	$post = get_post( $post_id );
+	if ( $post && 'auto-draft' === $post->post_status && ! empty( $igdb_data['name'] ) ) {
+		wp_update_post(
+			array(
+				'ID'         => $post_id,
+				'post_title' => sanitize_text_field( $igdb_data['name'] ),
+				'post_name'  => sanitize_title( $igdb_data['name'] ),
+			)
+		);
 	}
 
 	return rest_ensure_response(
 		array_merge(
 			$mapped,
-			array( 'name' => isset( $igdb_data['name'] ) ? $igdb_data['name'] : '' )
+			array(
+				'post_id' => (int) $post_id,
+				'name'    => isset( $igdb_data['name'] ) ? $igdb_data['name'] : '',
+			)
 		)
 	);
 }
@@ -1057,62 +1067,6 @@ function wp_game_library_find_game_post_by_igdb_id( $igdb_id ) {
 	}
 
 	return (int) $query->posts[0];
-}
-
-/**
- * REST callback: import an IGDB game and ensure it exists as a game post.
- *
- * @param WP_REST_Request $request Incoming REST request.
- *
- * @return WP_REST_Response|WP_Error
- */
-function wp_game_library_rest_import_game_to_library( WP_REST_Request $request ) {
-	$igdb_id   = (int) $request->get_param( 'igdb_id' );
-	$igdb_data = wp_game_library_igdb_fetch_game( $igdb_id );
-
-	if ( is_wp_error( $igdb_data ) ) {
-		return $igdb_data;
-	}
-
-	$post_id = wp_game_library_find_game_post_by_igdb_id( $igdb_id );
-
-	if ( ! $post_id ) {
-		$post_title = ! empty( $igdb_data['name'] )
-			? sanitize_text_field( $igdb_data['name'] )
-			: sprintf(
-				/* translators: %d: IGDB game ID */
-				__( 'IGDB Game %d', 'wp-game-library' ),
-				$igdb_id
-			);
-
-		$post_id = wp_insert_post(
-			array(
-				'post_type'   => 'game',
-				'post_status' => 'draft',
-				'post_title'  => $post_title,
-				'post_name'   => sanitize_title( $post_title ),
-			),
-			true
-		);
-
-		if ( is_wp_error( $post_id ) ) {
-			return $post_id;
-		}
-	}
-
-	wp_game_library_igdb_cache_game_data( $post_id, $igdb_data );
-
-	$mapped = wp_game_library_igdb_map_game_data( $igdb_data );
-
-	return rest_ensure_response(
-		array_merge(
-			$mapped,
-			array(
-				'post_id' => (int) $post_id,
-				'name'    => isset( $igdb_data['name'] ) ? $igdb_data['name'] : '',
-			)
-		)
-	);
 }
 
 // ============================================================
@@ -1317,7 +1271,7 @@ function wp_game_library_render_game_card_block( $attributes, $content ) {
 
 	$inner_content = '';
 	if ( ! empty( $content ) ) {
-		$inner_content = do_blocks( $content );
+		$inner_content = $content;
 	}
 
 	ob_start();

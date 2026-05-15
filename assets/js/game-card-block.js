@@ -79,7 +79,7 @@
 			setError( '' );
 
 			apiFetch( {
-				path: '/wp-game-library/v1/games/import-to-library',
+				path: '/wp-game-library/v1/games/import',
 				method: 'POST',
 				data: {
 					igdb_id: selected.id,
@@ -212,7 +212,7 @@
 		apiVersion: 2,
 		title: __( 'Game Card', 'wp-game-library' ),
 		description: __( 'Search IGDB, import a game, and render a game card.', 'wp-game-library' ),
-		icon: 'games',
+		icon: 'gamepad',
 		category: 'widgets',
 		attributes: {
 			gamePostId: {

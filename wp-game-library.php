@@ -11,6 +11,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+define( 'WP_GAME_LIBRARY_VERSION', '0.1.0' );
+
 /**
  * Register the game custom post type.
  *
@@ -283,6 +285,19 @@ function wp_game_library_sanitize_game_meta( $value, $meta_key = '', $object_typ
 		case '_user_notes':
 			return sanitize_textarea_field( (string) $value );
 
+		case '_game_screenshots':
+			// Accept either a PHP array (from map_game_data) or a JSON-encoded string (from REST/direct calls).
+			$decoded = is_array( $value ) ? $value : json_decode( (string) $value, true );
+			if ( ! is_array( $decoded ) ) {
+				return '';
+			}
+			$sanitized = array_values(
+				array_filter(
+					array_map( 'esc_url_raw', $decoded )
+				)
+			);
+			return wp_json_encode( $sanitized );
+
 		case '_igdb_slug':
 		case '_game_developers':
 		case '_game_publishers':
@@ -340,6 +355,7 @@ function wp_game_library_register_game_meta() {
 		'_game_developers'     => array( 'type' => 'string' ),
 		'_game_publishers'     => array( 'type' => 'string' ),
 		'_game_genres'         => array( 'type' => 'string' ),
+		'_game_screenshots'    => array( 'type' => 'string' ),
 		'_user_play_status'    => array( 'type' => 'string' ),
 		'_user_rating'         => array( 'type' => 'number' ),
 		'_user_notes'          => array( 'type' => 'string' ),
@@ -365,3 +381,751 @@ function wp_game_library_register_game_meta() {
 	}
 }
 add_action( 'init', 'wp_game_library_register_game_meta' );
+
+// ============================================================
+// Settings Page
+// ============================================================
+
+/**
+ * Register the plugin settings page under the Games menu.
+ *
+ * @return void
+ */
+function wp_game_library_add_settings_page() {
+	add_submenu_page(
+		'edit.php?post_type=game',
+		__( 'WP Game Library Settings', 'wp-game-library' ),
+		__( 'Settings', 'wp-game-library' ),
+		'manage_options',
+		'wp-game-library-settings',
+		'wp_game_library_render_settings_page'
+	);
+}
+add_action( 'admin_menu', 'wp_game_library_add_settings_page' );
+
+/**
+ * Register plugin settings and settings fields.
+ *
+ * @return void
+ */
+function wp_game_library_register_settings() {
+	register_setting(
+		'wp_game_library_settings',
+		'wp_game_library_twitch_client_id',
+		array(
+			'type'              => 'string',
+			'sanitize_callback' => 'sanitize_text_field',
+			'default'           => '',
+		)
+	);
+
+	register_setting(
+		'wp_game_library_settings',
+		'wp_game_library_twitch_client_secret',
+		array(
+			'type'              => 'string',
+			'sanitize_callback' => 'sanitize_text_field',
+			'default'           => '',
+		)
+	);
+
+	add_settings_section(
+		'wp_game_library_igdb_section',
+		__( 'IGDB / Twitch API Credentials', 'wp-game-library' ),
+		'wp_game_library_render_igdb_section',
+		'wp-game-library-settings'
+	);
+
+	add_settings_field(
+		'wp_game_library_twitch_client_id',
+		__( 'Twitch Client ID', 'wp-game-library' ),
+		'wp_game_library_render_client_id_field',
+		'wp-game-library-settings',
+		'wp_game_library_igdb_section'
+	);
+
+	add_settings_field(
+		'wp_game_library_twitch_client_secret',
+		__( 'Twitch Client Secret', 'wp-game-library' ),
+		'wp_game_library_render_client_secret_field',
+		'wp-game-library-settings',
+		'wp_game_library_igdb_section'
+	);
+}
+add_action( 'admin_init', 'wp_game_library_register_settings' );
+
+/**
+ * Render the IGDB settings section description.
+ *
+ * @return void
+ */
+function wp_game_library_render_igdb_section() {
+	echo '<p>' . esc_html__( 'Enter your Twitch Developer credentials to enable IGDB game search and import. You can obtain these from the Twitch Developer Console at https://dev.twitch.tv/console/apps.', 'wp-game-library' ) . '</p>';
+	echo '<p><strong>' . esc_html__( 'Security notice:', 'wp-game-library' ) . '</strong> ' . esc_html__( 'Credentials are stored as plain text in the WordPress options table. Restrict database access and wp-admin access to trusted administrators only.', 'wp-game-library' ) . '</p>';
+}
+
+/**
+ * Render the Twitch Client ID settings field.
+ *
+ * @return void
+ */
+function wp_game_library_render_client_id_field() {
+	$value = get_option( 'wp_game_library_twitch_client_id', '' );
+	printf(
+		'<input type="text" id="wp_game_library_twitch_client_id" name="wp_game_library_twitch_client_id" value="%s" class="regular-text" autocomplete="off" />',
+		esc_attr( $value )
+	);
+}
+
+/**
+ * Render the Twitch Client Secret settings field.
+ *
+ * @return void
+ */
+function wp_game_library_render_client_secret_field() {
+	$value = get_option( 'wp_game_library_twitch_client_secret', '' );
+	printf(
+		'<input type="password" id="wp_game_library_twitch_client_secret" name="wp_game_library_twitch_client_secret" value="%s" class="regular-text" autocomplete="off" />',
+		esc_attr( $value )
+	);
+}
+
+/**
+ * Render the plugin settings page.
+ *
+ * @return void
+ */
+function wp_game_library_render_settings_page() {
+	if ( ! current_user_can( 'manage_options' ) ) {
+		return;
+	}
+	?>
+	<div class="wrap">
+		<h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
+		<form action="options.php" method="post">
+			<?php
+			settings_fields( 'wp_game_library_settings' );
+			do_settings_sections( 'wp-game-library-settings' );
+			submit_button( __( 'Save Settings', 'wp-game-library' ) );
+			?>
+		</form>
+	</div>
+	<?php
+}
+
+// ============================================================
+// IGDB API Integration
+// ============================================================
+
+/**
+ * Retrieve a valid Twitch OAuth access token for IGDB requests.
+ *
+ * The token is cached in a transient until close to expiry.
+ *
+ * @return string|WP_Error Access token string or WP_Error on failure.
+ */
+function wp_game_library_igdb_get_access_token() {
+	$cached = get_transient( 'wp_game_library_igdb_access_token' );
+	if ( ! empty( $cached ) ) {
+		return $cached;
+	}
+
+	$client_id     = get_option( 'wp_game_library_twitch_client_id', '' );
+	$client_secret = get_option( 'wp_game_library_twitch_client_secret', '' );
+
+	if ( empty( $client_id ) || empty( $client_secret ) ) {
+		return new WP_Error(
+			'missing_credentials',
+			__( 'Twitch Client ID and Client Secret must be configured in WP Game Library settings.', 'wp-game-library' )
+		);
+	}
+
+	$response = wp_remote_post(
+		'https://id.twitch.tv/oauth2/token',
+		array(
+			'body'    => array(
+				'client_id'     => $client_id,
+				'client_secret' => $client_secret,
+				'grant_type'    => 'client_credentials',
+			),
+			'timeout' => 15,
+		)
+	);
+
+	if ( is_wp_error( $response ) ) {
+		return $response;
+	}
+
+	$status_code = wp_remote_retrieve_response_code( $response );
+	$body        = json_decode( wp_remote_retrieve_body( $response ), true );
+
+	if ( 200 !== $status_code || empty( $body['access_token'] ) ) {
+		return new WP_Error(
+			'token_request_failed',
+			sprintf(
+				/* translators: %d: HTTP status code */
+				__( 'Failed to retrieve IGDB access token (HTTP %d).', 'wp-game-library' ),
+				$status_code
+			)
+		);
+	}
+
+	// Cache for the token lifetime minus a 60-second buffer.
+	$expires_in = isset( $body['expires_in'] ) ? max( 0, (int) $body['expires_in'] - 60 ) : 3600;
+	set_transient( 'wp_game_library_igdb_access_token', $body['access_token'], $expires_in );
+
+	return $body['access_token'];
+}
+
+/**
+ * Enforce a rate limit of 4 requests/second for IGDB API calls.
+ *
+ * Tracks the timestamp of the last request via a transient and sleeps
+ * for the remainder of the minimum 250 ms interval when needed.
+ *
+ * Note: Transient-based timing is best-effort. Under persistent object
+ * caching (Redis/Memcached) the read/write latency may reduce precision,
+ * and concurrent admin requests can still burst beyond the limit. This
+ * implementation is sufficient for single-admin, interactive use.
+ *
+ * @return void
+ */
+function wp_game_library_igdb_rate_limit() {
+	$min_interval_us = 250000; // 250 ms → max 4 req/s.
+	$last_time       = get_transient( 'wp_game_library_igdb_last_request' );
+
+	if ( false !== $last_time ) {
+		$elapsed_us = (int) ( ( microtime( true ) - (float) $last_time ) * 1000000 );
+		if ( $elapsed_us < $min_interval_us ) {
+			usleep( $min_interval_us - $elapsed_us );
+		}
+	}
+
+	set_transient( 'wp_game_library_igdb_last_request', microtime( true ), 10 );
+}
+
+/**
+ * Send an authenticated, rate-limited request to the IGDB API.
+ *
+ * @param string $endpoint IGDB endpoint path (e.g. 'games').
+ * @param string $body     Apicalypse query body.
+ *
+ * @return array|WP_Error Decoded JSON array or WP_Error on failure.
+ */
+function wp_game_library_igdb_request( $endpoint, $body ) {
+	$access_token = wp_game_library_igdb_get_access_token();
+	if ( is_wp_error( $access_token ) ) {
+		return $access_token;
+	}
+
+	$client_id = get_option( 'wp_game_library_twitch_client_id', '' );
+
+	wp_game_library_igdb_rate_limit();
+
+	$response = wp_remote_post(
+		'https://api.igdb.com/v4/' . $endpoint,
+		array(
+			'headers' => array(
+				'Client-ID'     => $client_id,
+				'Authorization' => 'Bearer ' . $access_token,
+				'Content-Type'  => 'text/plain',
+			),
+			'body'    => $body,
+			'timeout' => 15,
+		)
+	);
+
+	if ( is_wp_error( $response ) ) {
+		return $response;
+	}
+
+	$status_code = wp_remote_retrieve_response_code( $response );
+
+	if ( $status_code < 200 || $status_code >= 300 ) {
+		return new WP_Error(
+			'igdb_request_failed',
+			sprintf(
+				/* translators: %d: HTTP status code */
+				__( 'IGDB API request failed (HTTP %d).', 'wp-game-library' ),
+				$status_code
+			)
+		);
+	}
+
+	$data = json_decode( wp_remote_retrieve_body( $response ), true );
+
+	if ( ! is_array( $data ) ) {
+		return new WP_Error(
+			'igdb_invalid_response',
+			__( 'IGDB API returned an unexpected response.', 'wp-game-library' )
+		);
+	}
+
+	return $data;
+}
+
+/**
+ * Search IGDB for games matching a title.
+ *
+ * @param string $title Game title to search for.
+ * @param int    $limit Maximum number of results (1–50).
+ *
+ * @return array[]|WP_Error Array of game data arrays or WP_Error on failure.
+ */
+function wp_game_library_igdb_search_games( $title, $limit = 10 ) {
+	$limit = max( 1, min( 50, (int) $limit ) );
+
+	// Whitelist-sanitize the title to characters safe inside an Apicalypse quoted string.
+	// Single and double quotes are excluded to prevent query injection; most game titles
+	// are still matched via IGDB's fuzzy search without them.
+	$safe_title = preg_replace( '/[^a-zA-Z0-9\s:!&,.-]/', '', $title );
+
+	$body = sprintf(
+		'fields id, name, slug, cover.url, summary, first_release_date, platforms.name, genres.name, involved_companies.company.name, involved_companies.developer, involved_companies.publisher, screenshots.url; search "%s"; limit %d;',
+		$safe_title,
+		$limit
+	);
+
+	return wp_game_library_igdb_request( 'games', $body );
+}
+
+/**
+ * Fetch a single game from IGDB by its numeric ID.
+ *
+ * @param int $igdb_id IGDB game ID.
+ *
+ * @return array|WP_Error Single game data array or WP_Error on failure.
+ */
+function wp_game_library_igdb_fetch_game( $igdb_id ) {
+	$igdb_id = absint( $igdb_id );
+	$body    = sprintf(
+		'fields id, name, slug, cover.url, summary, first_release_date, platforms.name, genres.name, involved_companies.company.name, involved_companies.developer, involved_companies.publisher, screenshots.url; where id = %d; limit 1;',
+		$igdb_id
+	);
+
+	$results = wp_game_library_igdb_request( 'games', $body );
+
+	if ( is_wp_error( $results ) ) {
+		return $results;
+	}
+
+	if ( empty( $results[0] ) ) {
+		return new WP_Error(
+			'igdb_game_not_found',
+			sprintf(
+				/* translators: %d: IGDB game ID */
+				__( 'No IGDB game found with ID %d.', 'wp-game-library' ),
+				$igdb_id
+			)
+		);
+	}
+
+	return $results[0];
+}
+
+/**
+ * Map raw IGDB game data to plugin post-meta key/value pairs.
+ *
+ * @param array $igdb_data Raw game data from the IGDB API.
+ *
+ * @return array Associative array of post meta key => sanitized value.
+ */
+function wp_game_library_igdb_map_game_data( array $igdb_data ) {
+	$meta = array();
+
+	if ( ! empty( $igdb_data['id'] ) ) {
+		$meta['_igdb_id'] = absint( $igdb_data['id'] );
+	}
+
+	if ( ! empty( $igdb_data['slug'] ) ) {
+		$meta['_igdb_slug'] = sanitize_text_field( $igdb_data['slug'] );
+	}
+
+	if ( ! empty( $igdb_data['summary'] ) ) {
+		$meta['_game_summary'] = sanitize_textarea_field( $igdb_data['summary'] );
+	}
+
+	// Cover URL: IGDB returns protocol-relative URLs; upgrade to https and use cover_big size.
+	if ( ! empty( $igdb_data['cover']['url'] ) ) {
+		$cover_url = str_replace( 't_thumb', 't_cover_big', $igdb_data['cover']['url'] );
+		if ( str_starts_with( $cover_url, '//' ) ) {
+			$cover_url = 'https:' . $cover_url;
+		}
+		$meta['_game_cover_url'] = esc_url_raw( $cover_url );
+	}
+
+	// Release date: IGDB returns a Unix timestamp.
+	if ( ! empty( $igdb_data['first_release_date'] ) ) {
+		$meta['_game_release_date'] = gmdate( 'Y-m-d', (int) $igdb_data['first_release_date'] );
+	}
+
+	// Genres: array of {name} objects → comma-separated string.
+	if ( ! empty( $igdb_data['genres'] ) && is_array( $igdb_data['genres'] ) ) {
+		$names = array_filter( array_column( $igdb_data['genres'], 'name' ) );
+		if ( ! empty( $names ) ) {
+			$meta['_game_genres'] = sanitize_text_field( implode( ', ', $names ) );
+		}
+	}
+
+	// Developers and publishers via involved_companies.
+	if ( ! empty( $igdb_data['involved_companies'] ) && is_array( $igdb_data['involved_companies'] ) ) {
+		$developers = array();
+		$publishers = array();
+
+		foreach ( $igdb_data['involved_companies'] as $entry ) {
+			$company_name = isset( $entry['company']['name'] ) ? $entry['company']['name'] : '';
+			if ( empty( $company_name ) ) {
+				continue;
+			}
+			if ( ! empty( $entry['developer'] ) ) {
+				$developers[] = $company_name;
+			}
+			if ( ! empty( $entry['publisher'] ) ) {
+				$publishers[] = $company_name;
+			}
+		}
+
+		if ( ! empty( $developers ) ) {
+			$meta['_game_developers'] = sanitize_text_field( implode( ', ', $developers ) );
+		}
+		if ( ! empty( $publishers ) ) {
+			$meta['_game_publishers'] = sanitize_text_field( implode( ', ', $publishers ) );
+		}
+	}
+
+	// Screenshots: array of {url} objects → raw URL array stored so the sanitize_callback handles
+	// esc_url_raw() and JSON encoding, avoiding redundant double-processing.
+	if ( ! empty( $igdb_data['screenshots'] ) && is_array( $igdb_data['screenshots'] ) ) {
+		$urls = array();
+		foreach ( $igdb_data['screenshots'] as $screenshot ) {
+			if ( empty( $screenshot['url'] ) ) {
+				continue;
+			}
+			$url = str_replace( 't_thumb', 't_screenshot_big', $screenshot['url'] );
+			if ( str_starts_with( $url, '//' ) ) {
+				$url = 'https:' . $url;
+			}
+			// Apply esc_url_raw() here as defense-in-depth; the sanitize_callback will also run it.
+			$urls[] = esc_url_raw( $url );
+		}
+		if ( ! empty( $urls ) ) {
+			$meta['_game_screenshots'] = $urls;
+		}
+	}
+
+	return $meta;
+}
+
+/**
+ * Persist IGDB game data as post meta and taxonomy terms for a game post.
+ *
+ * @param int   $post_id   Post ID of the game CPT entry.
+ * @param array $igdb_data Raw game data from the IGDB API.
+ *
+ * @return void
+ */
+function wp_game_library_igdb_cache_game_data( $post_id, array $igdb_data ) {
+	$meta = wp_game_library_igdb_map_game_data( $igdb_data );
+	foreach ( $meta as $key => $value ) {
+		update_post_meta( $post_id, $key, $value );
+	}
+
+	// Assign platform names as game_platform taxonomy terms.
+	if ( ! empty( $igdb_data['platforms'] ) && is_array( $igdb_data['platforms'] ) ) {
+		$platform_names = array_values( array_filter( array_column( $igdb_data['platforms'], 'name' ) ) );
+		if ( ! empty( $platform_names ) ) {
+			wp_set_object_terms( $post_id, $platform_names, 'game_platform' );
+		}
+	}
+}
+
+// ============================================================
+// REST API Endpoints
+// ============================================================
+
+/**
+ * Register WP Game Library REST API routes.
+ *
+ * @return void
+ */
+function wp_game_library_register_rest_routes() {
+	register_rest_route(
+		'wp-game-library/v1',
+		'/games/search',
+		array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => 'wp_game_library_rest_search_games',
+			'permission_callback' => static function () {
+				return current_user_can( 'edit_posts' );
+			},
+			'args'                => array(
+				'title' => array(
+					'required'          => true,
+					'type'              => 'string',
+					'sanitize_callback' => 'sanitize_text_field',
+				),
+				'limit' => array(
+					'required' => false,
+					'type'     => 'integer',
+					'default'  => 10,
+					'minimum'  => 1,
+					'maximum'  => 50,
+				),
+			),
+		)
+	);
+
+	register_rest_route(
+		'wp-game-library/v1',
+		'/games/import',
+		array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => 'wp_game_library_rest_import_game',
+			'permission_callback' => static function () {
+				return current_user_can( 'publish_posts' );
+			},
+			'args'                => array(
+				'igdb_id' => array(
+					'required' => true,
+					'type'     => 'integer',
+					'minimum'  => 1,
+				),
+				'post_id' => array(
+					'required' => false,
+					'type'     => 'integer',
+					'minimum'  => 1,
+				),
+			),
+		)
+	);
+}
+add_action( 'rest_api_init', 'wp_game_library_register_rest_routes' );
+
+/**
+ * REST callback: search IGDB for games by title.
+ *
+ * @param WP_REST_Request $request Incoming REST request.
+ *
+ * @return WP_REST_Response|WP_Error
+ */
+function wp_game_library_rest_search_games( WP_REST_Request $request ) {
+	$title   = $request->get_param( 'title' );
+	$limit   = $request->get_param( 'limit' );
+	$results = wp_game_library_igdb_search_games( $title, $limit );
+
+	if ( is_wp_error( $results ) ) {
+		return $results;
+	}
+
+	$games = array();
+	foreach ( $results as $game ) {
+		$cover_url = '';
+		if ( ! empty( $game['cover']['url'] ) ) {
+			$cover_url = str_replace( 't_thumb', 't_cover_small', $game['cover']['url'] );
+			if ( str_starts_with( $cover_url, '//' ) ) {
+				$cover_url = 'https:' . $cover_url;
+			}
+		}
+
+		$games[] = array(
+			'id'           => (int) $game['id'],
+			'name'         => isset( $game['name'] ) ? $game['name'] : '',
+			'cover_url'    => $cover_url,
+			'release_year' => ! empty( $game['first_release_date'] )
+				? (int) gmdate( 'Y', (int) $game['first_release_date'] )
+				: null,
+			'platforms'    => ! empty( $game['platforms'] )
+				? array_values( array_filter( array_column( $game['platforms'], 'name' ) ) )
+				: array(),
+		);
+	}
+
+	return rest_ensure_response( $games );
+}
+
+/**
+ * REST callback: fetch a game from IGDB and optionally cache it to a post.
+ *
+ * @param WP_REST_Request $request Incoming REST request.
+ *
+ * @return WP_REST_Response|WP_Error
+ */
+function wp_game_library_rest_import_game( WP_REST_Request $request ) {
+	$igdb_id   = (int) $request->get_param( 'igdb_id' );
+	$post_id   = $request->get_param( 'post_id' );
+	$igdb_data = wp_game_library_igdb_fetch_game( $igdb_id );
+
+	if ( is_wp_error( $igdb_data ) ) {
+		return $igdb_data;
+	}
+
+	$mapped = wp_game_library_igdb_map_game_data( $igdb_data );
+
+	if ( ! empty( $post_id ) ) {
+		$post_id = absint( $post_id );
+
+		if ( 'game' !== get_post_type( $post_id ) ) {
+			return new WP_Error(
+				'invalid_post',
+				__( 'The supplied post ID does not correspond to a game.', 'wp-game-library' ),
+				array( 'status' => 400 )
+			);
+		}
+
+		if ( ! current_user_can( 'edit_post', $post_id ) ) {
+			return new WP_Error(
+				'rest_forbidden',
+				__( 'You do not have permission to edit this game.', 'wp-game-library' ),
+				array( 'status' => 403 )
+			);
+		}
+
+		wp_game_library_igdb_cache_game_data( $post_id, $igdb_data );
+
+		// Update the post title when the post is still a draft.
+		$post = get_post( $post_id );
+		if ( $post && 'auto-draft' === $post->post_status && ! empty( $igdb_data['name'] ) ) {
+			wp_update_post(
+				array(
+					'ID'         => $post_id,
+					'post_title' => sanitize_text_field( $igdb_data['name'] ),
+					'post_name'  => sanitize_title( $igdb_data['name'] ),
+				)
+			);
+		}
+	}
+
+	return rest_ensure_response(
+		array_merge(
+			$mapped,
+			array( 'name' => isset( $igdb_data['name'] ) ? $igdb_data['name'] : '' )
+		)
+	);
+}
+
+// ============================================================
+// Admin Meta Box: IGDB Search
+// ============================================================
+
+/**
+ * Register the IGDB search meta box on the game post edit screen.
+ *
+ * @return void
+ */
+function wp_game_library_add_igdb_meta_box() {
+	add_meta_box(
+		'wp-game-library-igdb-search',
+		__( 'Search IGDB', 'wp-game-library' ),
+		'wp_game_library_render_igdb_meta_box',
+		'game',
+		'side',
+		'high'
+	);
+}
+add_action( 'add_meta_boxes', 'wp_game_library_add_igdb_meta_box' );
+
+/**
+ * Render the IGDB search meta box content.
+ *
+ * @param WP_Post $post Current post object.
+ *
+ * @return void
+ */
+function wp_game_library_render_igdb_meta_box( $post ) {
+	wp_nonce_field( 'wp_game_library_igdb_meta_box', 'wp_game_library_igdb_nonce' );
+	$igdb_id = get_post_meta( $post->ID, '_igdb_id', true );
+	?>
+	<div id="wp-game-library-igdb-search-wrap">
+		<?php if ( ! empty( $igdb_id ) ) : ?>
+		<p>
+			<?php
+			printf(
+				/* translators: %d: IGDB game ID */
+				esc_html__( 'IGDB ID: %d', 'wp-game-library' ),
+				(int) $igdb_id
+			);
+			?>
+			&nbsp;
+			<button type="button" id="wp-game-library-igdb-refresh-btn" class="button button-small">
+				<?php esc_html_e( 'Refresh from IGDB', 'wp-game-library' ); ?>
+			</button>
+			<span id="wp-game-library-igdb-refresh-status" style="display:block;margin-top:4px;"></span>
+		</p>
+		<hr />
+		<?php endif; ?>
+		<p>
+			<label for="wp-game-library-igdb-title"><?php esc_html_e( 'Game Title:', 'wp-game-library' ); ?></label>
+			<input type="text" id="wp-game-library-igdb-title" class="widefat" placeholder="<?php esc_attr_e( 'Search IGDB…', 'wp-game-library' ); ?>" />
+		</p>
+		<p>
+			<button type="button" id="wp-game-library-igdb-search-btn" class="button">
+				<?php esc_html_e( 'Search IGDB', 'wp-game-library' ); ?>
+			</button>
+		</p>
+		<div id="wp-game-library-igdb-results" style="display:none;">
+			<p><strong><?php esc_html_e( 'Select a game:', 'wp-game-library' ); ?></strong></p>
+			<ul id="wp-game-library-igdb-results-list" style="max-height:200px;overflow-y:auto;margin:0;padding:0;list-style:none;border:1px solid #ddd;background:#fff;"></ul>
+		</div>
+		<div id="wp-game-library-igdb-selected" style="display:none;">
+			<hr />
+			<p id="wp-game-library-igdb-selected-name" style="font-weight:bold;margin-bottom:8px;"></p>
+			<button type="button" id="wp-game-library-igdb-import-btn" class="button button-primary">
+				<?php esc_html_e( 'Import from IGDB', 'wp-game-library' ); ?>
+			</button>
+			<span id="wp-game-library-igdb-import-status" style="display:block;margin-top:4px;"></span>
+		</div>
+		<div id="wp-game-library-igdb-error" style="display:none;color:#d63638;margin-top:8px;"></div>
+	</div>
+	<?php
+}
+
+/**
+ * Enqueue admin JavaScript for the IGDB search meta box.
+ *
+ * @param string $hook Current admin page hook.
+ *
+ * @return void
+ */
+function wp_game_library_enqueue_igdb_admin_script( $hook ) {
+	global $post;
+
+	if ( 'post.php' !== $hook && 'post-new.php' !== $hook ) {
+		return;
+	}
+
+	if ( ! isset( $post ) || 'game' !== $post->post_type ) {
+		return;
+	}
+
+	$igdb_id = get_post_meta( $post->ID, '_igdb_id', true );
+
+	wp_enqueue_script(
+		'wp-game-library-igdb-admin',
+		plugin_dir_url( __FILE__ ) . 'assets/js/igdb-admin.js',
+		array( 'jquery' ),
+		WP_GAME_LIBRARY_VERSION,
+		true
+	);
+
+	wp_localize_script(
+		'wp-game-library-igdb-admin',
+		'wpGameLibraryIGDB',
+		array(
+			'restUrl'   => rest_url( 'wp-game-library/v1' ),
+			'restNonce' => wp_create_nonce( 'wp_rest' ),
+			'postId'    => $post->ID,
+			'igdbId'    => ! empty( $igdb_id ) ? (int) $igdb_id : null,
+			'i18n'      => array(
+				'searching'    => __( 'Searching…', 'wp-game-library' ),
+				'importing'    => __( 'Importing…', 'wp-game-library' ),
+				'refreshing'   => __( 'Refreshing…', 'wp-game-library' ),
+				'importDone'   => __( 'Imported! Reload the page to see the updated fields.', 'wp-game-library' ),
+				'refreshDone'  => __( 'Refreshed! Reload the page to see the updated fields.', 'wp-game-library' ),
+				'noResults'    => __( 'No results found.', 'wp-game-library' ),
+				'errorGeneric' => __( 'An error occurred. Please check your IGDB settings.', 'wp-game-library' ),
+				'searchBtn'    => __( 'Search IGDB', 'wp-game-library' ),
+			),
+		)
+	);
+}
+add_action( 'admin_enqueue_scripts', 'wp_game_library_enqueue_igdb_admin_script' );

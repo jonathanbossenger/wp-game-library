@@ -286,8 +286,8 @@ function wp_game_library_sanitize_game_meta( $value, $meta_key = '', $object_typ
 			return sanitize_textarea_field( (string) $value );
 
 		case '_game_screenshots':
-			// JSON-encoded array of screenshot URLs.
-			$decoded = json_decode( (string) $value, true );
+			// Accept either a PHP array (from map_game_data) or a JSON-encoded string (from REST/direct calls).
+			$decoded = is_array( $value ) ? $value : json_decode( (string) $value, true );
 			if ( ! is_array( $decoded ) ) {
 				return '';
 			}
@@ -461,6 +461,7 @@ add_action( 'admin_init', 'wp_game_library_register_settings' );
  */
 function wp_game_library_render_igdb_section() {
 	echo '<p>' . esc_html__( 'Enter your Twitch Developer credentials to enable IGDB game search and import. You can obtain these from the Twitch Developer Console at https://dev.twitch.tv/console/apps.', 'wp-game-library' ) . '</p>';
+	echo '<p><strong>' . esc_html__( 'Security notice:', 'wp-game-library' ) . '</strong> ' . esc_html__( 'Credentials are stored as plain text in the WordPress options table. Restrict database access and wp-admin access to trusted administrators only.', 'wp-game-library' ) . '</p>';
 }
 
 /**
@@ -582,6 +583,11 @@ function wp_game_library_igdb_get_access_token() {
  * Tracks the timestamp of the last request via a transient and sleeps
  * for the remainder of the minimum 250 ms interval when needed.
  *
+ * Note: Transient-based timing is best-effort. Under persistent object
+ * caching (Redis/Memcached) the read/write latency may reduce precision,
+ * and concurrent admin requests can still burst beyond the limit. This
+ * implementation is sufficient for single-admin, interactive use.
+ *
  * @return void
  */
 function wp_game_library_igdb_rate_limit() {
@@ -668,9 +674,15 @@ function wp_game_library_igdb_request( $endpoint, $body ) {
  */
 function wp_game_library_igdb_search_games( $title, $limit = 10 ) {
 	$limit = max( 1, min( 50, (int) $limit ) );
-	$body  = sprintf(
+
+	// Whitelist-sanitize the title to characters safe inside an Apicalypse quoted string.
+	// Single and double quotes are excluded to prevent query injection; most game titles
+	// are still matched via IGDB's fuzzy search without them.
+	$safe_title = preg_replace( '/[^a-zA-Z0-9\s:!&,.-]/', '', $title );
+
+	$body = sprintf(
 		'fields id, name, slug, cover.url, summary, first_release_date, platforms.name, genres.name, involved_companies.company.name, involved_companies.developer, involved_companies.publisher, screenshots.url; search "%s"; limit %d;',
-		addslashes( $title ),
+		$safe_title,
 		$limit
 	);
 
@@ -781,7 +793,8 @@ function wp_game_library_igdb_map_game_data( array $igdb_data ) {
 		}
 	}
 
-	// Screenshots: array of {url} objects → JSON-encoded array of https URLs.
+	// Screenshots: array of {url} objects → raw URL array stored so the sanitize_callback handles
+	// esc_url_raw() and JSON encoding, avoiding redundant double-processing.
 	if ( ! empty( $igdb_data['screenshots'] ) && is_array( $igdb_data['screenshots'] ) ) {
 		$urls = array();
 		foreach ( $igdb_data['screenshots'] as $screenshot ) {
@@ -792,10 +805,11 @@ function wp_game_library_igdb_map_game_data( array $igdb_data ) {
 			if ( str_starts_with( $url, '//' ) ) {
 				$url = 'https:' . $url;
 			}
+			// Apply esc_url_raw() here as defense-in-depth; the sanitize_callback will also run it.
 			$urls[] = esc_url_raw( $url );
 		}
 		if ( ! empty( $urls ) ) {
-			$meta['_game_screenshots'] = wp_json_encode( $urls );
+			$meta['_game_screenshots'] = $urls;
 		}
 	}
 

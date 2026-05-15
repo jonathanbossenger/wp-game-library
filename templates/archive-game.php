@@ -39,14 +39,14 @@ $sort_options = array(
 	'rating_asc'  => __( 'Rating (low to high)', 'wp-game-library' ),
 );
 
-$active_filters = array();
-
-foreach ( $taxonomies as $taxonomy => $taxonomy_args ) {
-	$query_key                   = $taxonomy_args['query_key'];
-	$active_filters[ $query_key ] = isset( $_GET[ $query_key ] ) ? sanitize_title( wp_unslash( $_GET[ $query_key ] ) ) : '';
-}
-
-$active_sort = isset( $_GET['sort'] ) ? sanitize_key( wp_unslash( $_GET['sort'] ) ) : 'date_desc';
+$archive_filters = wp_game_library_get_archive_filters();
+$active_filters  = array(
+	'status'     => $archive_filters['status'],
+	'platform'   => $archive_filters['platform'],
+	'genre'      => $archive_filters['genre'],
+	'collection' => $archive_filters['collection'],
+);
+$active_sort     = $archive_filters['sort'];
 
 if ( ! isset( $sort_options[ $active_sort ] ) ) {
 	$active_sort = 'date_desc';
@@ -107,7 +107,7 @@ if ( ! isset( $sort_options[ $active_sort ] ) ) {
 
 				$post_id    = get_the_ID();
 				$title      = get_the_title();
-				$cover_url  = get_post_meta( $post_id, '_game_cover_url', true );
+				$cover_url  = wp_game_library_get_archive_cover_image_url( get_post_meta( $post_id, '_game_cover_url', true ) );
 				$summary    = get_post_meta( $post_id, '_game_summary', true );
 				$user_rating = get_post_meta( $post_id, '_user_rating', true );
 				$status     = '';
@@ -125,11 +125,9 @@ if ( ! isset( $sort_options[ $active_sort ] ) ) {
 				}
 				?>
 				<article <?php post_class( 'wp-game-library-game-card is-variation-compact' ); ?>>
-					<?php if ( ! empty( $cover_url ) ) : ?>
-						<a class="wp-game-library-game-card__cover" href="<?php the_permalink(); ?>">
-							<img src="<?php echo esc_url( $cover_url ); ?>" alt="<?php echo esc_attr( sprintf( __( 'Cover art for %s', 'wp-game-library' ), $title ) ); ?>" loading="lazy" />
-						</a>
-					<?php endif; ?>
+					<a class="wp-game-library-game-card__cover" href="<?php the_permalink(); ?>">
+						<img src="<?php echo esc_url( $cover_url ); ?>" alt="<?php echo esc_attr( sprintf( __( 'Cover art for %s', 'wp-game-library' ), $title ) ); ?>" loading="lazy" />
+					</a>
 					<div class="wp-game-library-game-card__content">
 						<h2 class="wp-game-library-game-card__title">
 							<a href="<?php the_permalink(); ?>"><?php echo esc_html( $title ); ?></a>

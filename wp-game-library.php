@@ -69,6 +69,160 @@ function wp_game_library_register_game_post_type() {
 add_action( 'init', 'wp_game_library_register_game_post_type' );
 
 /**
+ * Register core game taxonomies.
+ *
+ * @return void
+ */
+function wp_game_library_register_game_taxonomies() {
+	$taxonomies = array(
+		'game_platform'   => array(
+			'hierarchical' => false,
+			'labels'       => array(
+				'name'                       => __( 'Platforms', 'wp-game-library' ),
+				'singular_name'              => __( 'Platform', 'wp-game-library' ),
+				'search_items'               => __( 'Search Platforms', 'wp-game-library' ),
+				'popular_items'              => __( 'Popular Platforms', 'wp-game-library' ),
+				'all_items'                  => __( 'All Platforms', 'wp-game-library' ),
+				'edit_item'                  => __( 'Edit Platform', 'wp-game-library' ),
+				'update_item'                => __( 'Update Platform', 'wp-game-library' ),
+				'add_new_item'               => __( 'Add New Platform', 'wp-game-library' ),
+				'new_item_name'              => __( 'New Platform Name', 'wp-game-library' ),
+				'separate_items_with_commas' => __( 'Separate platforms with commas', 'wp-game-library' ),
+				'add_or_remove_items'        => __( 'Add or remove platforms', 'wp-game-library' ),
+				'choose_from_most_used'      => __( 'Choose from the most used platforms', 'wp-game-library' ),
+				'menu_name'                  => __( 'Platforms', 'wp-game-library' ),
+			),
+			'rewrite'      => array(
+				'slug'       => 'game-platform',
+				'with_front' => false,
+			),
+		),
+		'game_genre'      => array(
+			'hierarchical' => true,
+			'labels'       => array(
+				'name'              => __( 'Genres', 'wp-game-library' ),
+				'singular_name'     => __( 'Genre', 'wp-game-library' ),
+				'search_items'      => __( 'Search Genres', 'wp-game-library' ),
+				'all_items'         => __( 'All Genres', 'wp-game-library' ),
+				'parent_item'       => __( 'Parent Genre', 'wp-game-library' ),
+				'parent_item_colon' => __( 'Parent Genre:', 'wp-game-library' ),
+				'edit_item'         => __( 'Edit Genre', 'wp-game-library' ),
+				'update_item'       => __( 'Update Genre', 'wp-game-library' ),
+				'add_new_item'      => __( 'Add New Genre', 'wp-game-library' ),
+				'new_item_name'     => __( 'New Genre Name', 'wp-game-library' ),
+				'menu_name'         => __( 'Genres', 'wp-game-library' ),
+			),
+			'rewrite'      => array(
+				'slug'       => 'game-genre',
+				'with_front' => false,
+			),
+		),
+		'game_status'     => array(
+			'hierarchical' => false,
+			'labels'       => array(
+				'name'                       => __( 'Statuses', 'wp-game-library' ),
+				'singular_name'              => __( 'Status', 'wp-game-library' ),
+				'search_items'               => __( 'Search Statuses', 'wp-game-library' ),
+				'popular_items'              => __( 'Popular Statuses', 'wp-game-library' ),
+				'all_items'                  => __( 'All Statuses', 'wp-game-library' ),
+				'edit_item'                  => __( 'Edit Status', 'wp-game-library' ),
+				'update_item'                => __( 'Update Status', 'wp-game-library' ),
+				'add_new_item'               => __( 'Add New Status', 'wp-game-library' ),
+				'new_item_name'              => __( 'New Status Name', 'wp-game-library' ),
+				'separate_items_with_commas' => __( 'Separate statuses with commas', 'wp-game-library' ),
+				'add_or_remove_items'        => __( 'Add or remove statuses', 'wp-game-library' ),
+				'choose_from_most_used'      => __( 'Choose from the most used statuses', 'wp-game-library' ),
+				'menu_name'                  => __( 'Statuses', 'wp-game-library' ),
+			),
+			'rewrite'      => array(
+				'slug'       => 'game-status',
+				'with_front' => false,
+			),
+		),
+		'game_collection' => array(
+			'hierarchical' => false,
+			'labels'       => array(
+				'name'                       => __( 'Collections', 'wp-game-library' ),
+				'singular_name'              => __( 'Collection', 'wp-game-library' ),
+				'search_items'               => __( 'Search Collections', 'wp-game-library' ),
+				'popular_items'              => __( 'Popular Collections', 'wp-game-library' ),
+				'all_items'                  => __( 'All Collections', 'wp-game-library' ),
+				'edit_item'                  => __( 'Edit Collection', 'wp-game-library' ),
+				'update_item'                => __( 'Update Collection', 'wp-game-library' ),
+				'add_new_item'               => __( 'Add New Collection', 'wp-game-library' ),
+				'new_item_name'              => __( 'New Collection Name', 'wp-game-library' ),
+				'separate_items_with_commas' => __( 'Separate collections with commas', 'wp-game-library' ),
+				'add_or_remove_items'        => __( 'Add or remove collections', 'wp-game-library' ),
+				'choose_from_most_used'      => __( 'Choose from the most used collections', 'wp-game-library' ),
+				'menu_name'                  => __( 'Collections', 'wp-game-library' ),
+			),
+			'rewrite'      => array(
+				'slug'       => 'game-collection',
+				'with_front' => false,
+			),
+		),
+	);
+
+	foreach ( $taxonomies as $taxonomy => $taxonomy_args ) {
+		register_taxonomy(
+			$taxonomy,
+			array( 'game' ),
+			array(
+				'labels'            => $taxonomy_args['labels'],
+				'public'            => true,
+				'hierarchical'      => $taxonomy_args['hierarchical'],
+				'show_ui'           => true,
+				'show_admin_column' => true,
+				'show_in_quick_edit' => true,
+				'show_in_rest'      => true,
+				'rewrite'           => $taxonomy_args['rewrite'],
+			)
+		);
+	}
+}
+add_action( 'init', 'wp_game_library_register_game_taxonomies', 11 );
+
+/**
+ * Ensure core game status terms exist.
+ *
+ * @return void
+ */
+function wp_game_library_seed_game_status_terms() {
+	if ( get_option( 'wp_game_library_seeded_game_status_terms', false ) ) {
+		return;
+	}
+
+	if ( ! taxonomy_exists( 'game_status' ) ) {
+		return;
+	}
+
+	$statuses = array(
+		'Unplayed',
+		'Started',
+		'Finished',
+		'Abandoned',
+		'Evergreen',
+		'Wishlist',
+	);
+	$all_terms_seeded = true;
+
+	foreach ( $statuses as $status ) {
+		if ( ! term_exists( $status, 'game_status' ) ) {
+			$term = wp_insert_term( $status, 'game_status' );
+
+			if ( is_wp_error( $term ) ) {
+				$all_terms_seeded = false;
+			}
+		}
+	}
+
+	if ( $all_terms_seeded ) {
+		update_option( 'wp_game_library_seeded_game_status_terms', true );
+	}
+}
+add_action( 'init', 'wp_game_library_seed_game_status_terms', 12 );
+
+/**
  * Sanitize game meta values before storage.
  *
  * @param mixed  $value    Meta value.

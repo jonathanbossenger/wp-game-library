@@ -188,6 +188,14 @@ add_action( 'init', 'wp_game_library_register_game_taxonomies', 11 );
  * @return void
  */
 function wp_game_library_seed_game_status_terms() {
+	if ( get_option( 'wp_game_library_seeded_game_status_terms', false ) ) {
+		return;
+	}
+
+	if ( ! taxonomy_exists( 'game_status' ) ) {
+		return;
+	}
+
 	$statuses = array(
 		'Unplayed',
 		'Started',
@@ -196,11 +204,20 @@ function wp_game_library_seed_game_status_terms() {
 		'Evergreen',
 		'Wishlist',
 	);
+	$all_terms_seeded = true;
 
 	foreach ( $statuses as $status ) {
 		if ( ! term_exists( $status, 'game_status' ) ) {
-			wp_insert_term( $status, 'game_status' );
+			$term = wp_insert_term( $status, 'game_status' );
+
+			if ( is_wp_error( $term ) ) {
+				$all_terms_seeded = false;
+			}
 		}
+	}
+
+	if ( $all_terms_seeded ) {
+		update_option( 'wp_game_library_seeded_game_status_terms', true );
 	}
 }
 add_action( 'init', 'wp_game_library_seed_game_status_terms', 12 );

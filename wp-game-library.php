@@ -1560,6 +1560,25 @@ function wp_game_library_enqueue_archive_assets() {
 add_action( 'wp_enqueue_scripts', 'wp_game_library_enqueue_archive_assets' );
 
 /**
+ * Enqueue front-end assets for single game views.
+ *
+ * @return void
+ */
+function wp_game_library_enqueue_single_assets() {
+	if ( ! is_singular( 'game' ) ) {
+		return;
+	}
+
+	wp_enqueue_style(
+		'wp-game-library-single',
+		plugin_dir_url( __FILE__ ) . 'assets/css/single-game.css',
+		array(),
+		WP_GAME_LIBRARY_VERSION
+	);
+}
+add_action( 'wp_enqueue_scripts', 'wp_game_library_enqueue_single_assets' );
+
+/**
  * Use plugin template for the game archive.
  *
  * @param string $template Resolved template path.

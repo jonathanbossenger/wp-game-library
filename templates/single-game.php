@@ -34,7 +34,7 @@ $format_date_for_display = static function ( $date_value ) {
 
 			$post_id             = get_the_ID();
 			$title               = get_the_title();
-			$cover_url           = wp_game_library_get_archive_cover_image_url( get_post_meta( $post_id, '_game_cover_url', true ) );
+			$raw_cover_url       = get_post_meta( $post_id, '_game_cover_url', true );
 			$summary             = get_post_meta( $post_id, '_game_summary', true );
 			$release_date        = get_post_meta( $post_id, '_game_release_date', true );
 			$developers          = get_post_meta( $post_id, '_game_developers', true );
@@ -46,6 +46,16 @@ $format_date_for_display = static function ( $date_value ) {
 			$user_ownership      = get_post_meta( $post_id, '_user_ownership', true );
 			$user_date_added     = get_post_meta( $post_id, '_user_date_added', true );
 			$user_date_completed = get_post_meta( $post_id, '_user_date_completed', true );
+
+			if ( function_exists( 'wp_game_library_get_archive_cover_image_url' ) ) {
+				$cover_url = wp_game_library_get_archive_cover_image_url( $raw_cover_url );
+			} else {
+				$cover_url = esc_url_raw( $raw_cover_url, array( 'http', 'https' ) );
+
+				if ( empty( $cover_url ) && function_exists( 'wp_game_library_get_cover_placeholder_image' ) ) {
+					$cover_url = wp_game_library_get_cover_placeholder_image();
+				}
+			}
 
 			if ( empty( $summary ) ) {
 				$summary = get_the_excerpt();
@@ -77,9 +87,11 @@ $format_date_for_display = static function ( $date_value ) {
 				</header>
 
 				<div class="wp-game-library-single-game__layout">
-					<div class="wp-game-library-single-game__cover">
-						<img src="<?php echo esc_url( $cover_url ); ?>" alt="<?php echo esc_attr( sprintf( __( 'Cover art for %s', 'wp-game-library' ), $title ) ); ?>" loading="lazy" />
-					</div>
+					<?php if ( ! empty( $cover_url ) ) : ?>
+						<div class="wp-game-library-single-game__cover">
+							<img src="<?php echo esc_url( $cover_url ); ?>" alt="<?php echo esc_attr( sprintf( __( 'Cover art for %s', 'wp-game-library' ), $title ) ); ?>" loading="lazy" />
+						</div>
+					<?php endif; ?>
 
 					<div class="wp-game-library-single-game__details">
 						<?php if ( ! empty( $summary ) ) : ?>

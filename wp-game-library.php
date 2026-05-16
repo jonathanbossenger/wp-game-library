@@ -404,6 +404,44 @@ function wp_game_library_add_settings_page() {
 add_action( 'admin_menu', 'wp_game_library_add_settings_page' );
 
 /**
+ * Register the manual Add Game page under the Games menu.
+ *
+ * @return void
+ */
+function wp_game_library_add_manual_add_game_page() {
+	$post_type = get_post_type_object( 'game' );
+
+	if ( ! $post_type || empty( $post_type->cap->create_posts ) ) {
+		return;
+	}
+
+	add_submenu_page(
+		'edit.php?post_type=game',
+		__( 'Add Game from IGDB', 'wp-game-library' ),
+		__( 'Add from IGDB', 'wp-game-library' ),
+		$post_type->cap->create_posts,
+		'wp-game-library-add-game',
+		'wp_game_library_render_manual_add_game_page'
+	);
+}
+add_action( 'admin_menu', 'wp_game_library_add_manual_add_game_page' );
+
+/**
+ * Render the manual Add Game admin page.
+ *
+ * @return void
+ */
+function wp_game_library_render_manual_add_game_page() {
+	?>
+	<div class="wrap">
+		<h1><?php esc_html_e( 'Add Game from IGDB', 'wp-game-library' ); ?></h1>
+		<p><?php esc_html_e( 'Search IGDB by title and import a game into your library.', 'wp-game-library' ); ?></p>
+		<?php wp_game_library_render_igdb_search_ui(); ?>
+	</div>
+	<?php
+}
+
+/**
  * Register plugin settings and settings fields.
  *
  * @return void
@@ -966,9 +1004,10 @@ function wp_game_library_rest_import_game( WP_REST_Request $request ) {
 	}
 
 	$mapped = wp_game_library_igdb_map_game_data( $igdb_data );
+	$existing_post_id = wp_game_library_find_game_post_by_igdb_id( $igdb_id );
 
-	if ( empty( $post_id ) ) {
-		$post_id = wp_game_library_find_game_post_by_igdb_id( $igdb_id );
+	if ( ! empty( $existing_post_id ) ) {
+		$post_id = (int) $existing_post_id;
 	}
 
 	if ( ! empty( $post_id ) ) {
@@ -1091,15 +1130,13 @@ function wp_game_library_add_igdb_meta_box() {
 add_action( 'add_meta_boxes', 'wp_game_library_add_igdb_meta_box' );
 
 /**
- * Render the IGDB search meta box content.
+ * Render the shared IGDB search UI.
  *
- * @param WP_Post $post Current post object.
+ * @param int $igdb_id Existing IGDB ID for refresh actions.
  *
  * @return void
  */
-function wp_game_library_render_igdb_meta_box( $post ) {
-	wp_nonce_field( 'wp_game_library_igdb_meta_box', 'wp_game_library_igdb_nonce' );
-	$igdb_id = get_post_meta( $post->ID, '_igdb_id', true );
+function wp_game_library_render_igdb_search_ui( $igdb_id = 0 ) {
 	?>
 	<div id="wp-game-library-igdb-search-wrap">
 		<?php if ( ! empty( $igdb_id ) ) : ?>
@@ -1146,6 +1183,19 @@ function wp_game_library_render_igdb_meta_box( $post ) {
 }
 
 /**
+ * Render the IGDB search meta box content.
+ *
+ * @param WP_Post $post Current post object.
+ *
+ * @return void
+ */
+function wp_game_library_render_igdb_meta_box( $post ) {
+	wp_nonce_field( 'wp_game_library_igdb_meta_box', 'wp_game_library_igdb_nonce' );
+	$igdb_id = get_post_meta( $post->ID, '_igdb_id', true );
+	wp_game_library_render_igdb_search_ui( $igdb_id );
+}
+
+/**
  * Enqueue admin JavaScript for the IGDB search meta box.
  *
  * @param string $hook Current admin page hook.
@@ -1155,15 +1205,23 @@ function wp_game_library_render_igdb_meta_box( $post ) {
 function wp_game_library_enqueue_igdb_admin_script( $hook ) {
 	global $post;
 
-	if ( 'post.php' !== $hook && 'post-new.php' !== $hook ) {
+	$is_manual_add_page = ( 'game_page_wp-game-library-add-game' === $hook );
+
+	if ( 'post.php' !== $hook && 'post-new.php' !== $hook && ! $is_manual_add_page ) {
 		return;
 	}
 
-	if ( ! isset( $post ) || 'game' !== $post->post_type ) {
-		return;
-	}
+	$post_id = 0;
+	$igdb_id = null;
 
-	$igdb_id = get_post_meta( $post->ID, '_igdb_id', true );
+	if ( ! $is_manual_add_page ) {
+		if ( ! isset( $post ) || 'game' !== $post->post_type ) {
+			return;
+		}
+
+		$post_id = (int) $post->ID;
+		$igdb_id = get_post_meta( $post->ID, '_igdb_id', true );
+	}
 
 	wp_enqueue_script(
 		'wp-game-library-igdb-admin',
@@ -1179,12 +1237,14 @@ function wp_game_library_enqueue_igdb_admin_script( $hook ) {
 		array(
 			'restUrl'   => rest_url( 'wp-game-library/v1' ),
 			'restNonce' => wp_create_nonce( 'wp_rest' ),
-			'postId'    => $post->ID,
+			'postId'    => $post_id,
 			'igdbId'    => ! empty( $igdb_id ) ? (int) $igdb_id : null,
+			'editPostUrl' => admin_url( 'post.php?action=edit&post=' ),
 			'i18n'      => array(
 				'searching'    => __( 'Searching…', 'wp-game-library' ),
 				'importing'    => __( 'Importing…', 'wp-game-library' ),
 				'refreshing'   => __( 'Refreshing…', 'wp-game-library' ),
+				'addDone'      => __( 'Game added! Opening editor…', 'wp-game-library' ),
 				'importDone'   => __( 'Imported! Reload the page to see the updated fields.', 'wp-game-library' ),
 				'refreshDone'  => __( 'Refreshed! Reload the page to see the updated fields.', 'wp-game-library' ),
 				'noResults'    => __( 'No results found.', 'wp-game-library' ),

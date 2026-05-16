@@ -503,6 +503,12 @@ function wp_game_library_save_play_status_meta_box( $post_id ) {
 	}
 
 	$term = get_term_by( 'name', $new_status, 'game_status' );
+	if ( ! $term || is_wp_error( $term ) ) {
+		$result = wp_insert_term( $new_status, 'game_status' );
+		if ( ! is_wp_error( $result ) ) {
+			$term = get_term( $result['term_id'], 'game_status' );
+		}
+	}
 	if ( $term && ! is_wp_error( $term ) ) {
 		wp_set_object_terms( $post_id, array( $term->term_id ), 'game_status' );
 	}
@@ -581,6 +587,12 @@ function wp_game_library_sync_meta_to_game_status( $meta_id, $object_id, $meta_k
 		wp_set_object_terms( $object_id, array(), 'game_status' );
 	} else {
 		$term = get_term_by( 'name', (string) $meta_value, 'game_status' );
+		if ( ! $term || is_wp_error( $term ) ) {
+			$result = wp_insert_term( (string) $meta_value, 'game_status' );
+			if ( ! is_wp_error( $result ) ) {
+				$term = get_term( $result['term_id'], 'game_status' );
+			}
+		}
 		if ( $term && ! is_wp_error( $term ) ) {
 			wp_set_object_terms( $object_id, array( $term->term_id ), 'game_status' );
 		}

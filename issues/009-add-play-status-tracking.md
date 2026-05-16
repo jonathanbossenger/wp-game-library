@@ -23,5 +23,5 @@ Backlog management is a core user need in the PRD.
 - [ ] Status is visible in archive cards and single game views
 
 ## Reference
-- `readme.md` → **Section 5.1: Data Model**
-- `readme.md` → **Section 6: Phase 1 (MVP)**
+- `planning.md` → **Section 5.1: Data Model**
+- `planning.md` → **Section 6: Phase 1 (MVP)**

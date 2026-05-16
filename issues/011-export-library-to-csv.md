@@ -26,6 +26,6 @@ Portability and data ownership are core project goals.
 - [ ] Generated file downloads successfully in wp-admin without exposing secrets
 
 ## Reference
-- `readme.md` → **Section 3: Goals & Success Metrics (Portability)**
-- `readme.md` → **Section 5.1: Data Model**
-- `readme.md` → **Section 6: Phase 1 (MVP)**
+- `planning.md` → **Section 3: Goals & Success Metrics (Portability)**
+- `planning.md` → **Section 5.1: Data Model**
+- `planning.md` → **Section 6: Phase 1 (MVP)**

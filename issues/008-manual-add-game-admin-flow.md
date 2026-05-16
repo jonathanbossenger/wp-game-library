@@ -24,5 +24,5 @@ MVP requires a non-block workflow for admins who manage entries directly.
 - [ ] Flow includes failure handling for missing credentials, empty results, and API errors/rate limits
 
 ## Reference
-- `readme.md` → **Section 5.2: IGDB API Integration**
-- `readme.md` → **Section 6: Phase 1 (MVP)**
+- `planning.md` → **Section 5.2: IGDB API Integration**
+- `planning.md` → **Section 6: Phase 1 (MVP)**

@@ -24,5 +24,5 @@ The block is the primary editor UX for adding and displaying games.
 - [ ] Block works in both editor preview and frontend rendering
 
 ## Reference
-- `readme.md` → **Section 5.3: Gutenberg Block: Game Card**
-- `readme.md` → **Section 6: Phase 1 (MVP)**
+- `planning.md` → **Section 5.3: Gutenberg Block: Game Card**
+- `planning.md` → **Section 6: Phase 1 (MVP)**

@@ -23,5 +23,5 @@ The PRD data model requires first-class taxonomy support for filtering, status t
 - [ ] Taxonomies are manageable in wp-admin and usable for archive/single filtering
 
 ## Reference
-- `readme.md` → **Section 5.1: Data Model**
-- `readme.md` → **Section 6: Phase 1 (MVP)**
+- `planning.md` → **Section 5.1: Data Model**
+- `planning.md` → **Section 6: Phase 1 (MVP)**

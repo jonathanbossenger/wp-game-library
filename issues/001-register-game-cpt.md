@@ -20,5 +20,5 @@ The PRD defines `game` as the core content type used to store library entries.
 - [ ] CPT labels and capabilities support wp-admin management and public display
 
 ## Reference
-- `readme.md` → **Section 5.1: Data Model**
-- `readme.md` → **Section 6: Phase 1 (MVP)**
+- `planning.md` → **Section 5.1: Data Model**
+- `planning.md` → **Section 6: Phase 1 (MVP)**

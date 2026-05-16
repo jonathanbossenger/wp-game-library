@@ -21,6 +21,6 @@ Each game should have a dedicated page with enriched metadata and user fields.
 - [ ] Template works with block-theme and classic-theme fallbacks
 
 ## Reference
-- `readme.md` → **Section 5.1: Data Model**
-- `readme.md` → **Section 5.4: Library Views**
-- `readme.md` → **Section 6: Phase 1 (MVP)**
+- `planning.md` → **Section 5.1: Data Model**
+- `planning.md` → **Section 5.4: Library Views**
+- `planning.md` → **Section 6: Phase 1 (MVP)**

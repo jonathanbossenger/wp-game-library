@@ -878,6 +878,53 @@ function wp_game_library_render_manual_add_game_page() {
 }
 
 /**
+ * Register the library CSV export page under the Games menu.
+ *
+ * @return void
+ */
+function wp_game_library_add_export_page() {
+	$post_type = get_post_type_object( 'game' );
+
+	if ( ! $post_type || empty( $post_type->cap->edit_posts ) ) {
+		return;
+	}
+
+	add_submenu_page(
+		'edit.php?post_type=game',
+		__( 'Export Library CSV', 'wp-game-library' ),
+		__( 'Export CSV', 'wp-game-library' ),
+		$post_type->cap->edit_posts,
+		'wp-game-library-export',
+		'wp_game_library_render_export_page'
+	);
+}
+add_action( 'admin_menu', 'wp_game_library_add_export_page' );
+
+/**
+ * Render the library CSV export admin page.
+ *
+ * @return void
+ */
+function wp_game_library_render_export_page() {
+	$post_type = get_post_type_object( 'game' );
+
+	if ( ! $post_type || empty( $post_type->cap->edit_posts ) || ! current_user_can( $post_type->cap->edit_posts ) ) {
+		return;
+	}
+	?>
+	<div class="wrap">
+		<h1><?php esc_html_e( 'Export Game Library', 'wp-game-library' ); ?></h1>
+		<p><?php esc_html_e( 'Download your full game library as a CSV file.', 'wp-game-library' ); ?></p>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<input type="hidden" name="action" value="wp_game_library_export_library_csv" />
+			<?php wp_nonce_field( 'wp_game_library_export_library_csv' ); ?>
+			<?php submit_button( __( 'Export Library CSV', 'wp-game-library' ), 'primary', 'submit', false ); ?>
+		</form>
+	</div>
+	<?php
+}
+
+/**
  * Register plugin settings and settings fields.
  *
  * @return void
@@ -986,6 +1033,134 @@ function wp_game_library_render_settings_page() {
 	</div>
 	<?php
 }
+
+/**
+ * Build a single CSV row for a game post.
+ *
+ * @param int $post_id Game post ID.
+ *
+ * @return array<string>
+ */
+function wp_game_library_build_export_row( $post_id ) {
+	$platform_names = wp_get_post_terms( $post_id, 'game_platform', array( 'fields' => 'names' ) );
+	$genre_names    = wp_get_post_terms( $post_id, 'game_genre', array( 'fields' => 'names' ) );
+	$status_names   = wp_get_post_terms( $post_id, 'game_status', array( 'fields' => 'names' ) );
+
+	$platforms = ! is_wp_error( $platform_names ) ? implode( ', ', $platform_names ) : '';
+	$genres    = ! is_wp_error( $genre_names ) ? implode( ', ', $genre_names ) : '';
+	$status    = (string) get_post_meta( $post_id, '_user_play_status', true );
+	$status_term = ( ! is_wp_error( $status_names ) && ! empty( $status_names[0] ) ) ? (string) $status_names[0] : '';
+
+	if ( '' === $genres ) {
+		$genres = (string) get_post_meta( $post_id, '_game_genres', true );
+	}
+
+	if ( '' === $status && '' !== $status_term ) {
+		$status = $status_term;
+	}
+
+	return array(
+		(string) $post_id,
+		wp_strip_all_tags( get_the_title( $post_id ) ),
+		(string) get_post_meta( $post_id, '_igdb_id', true ),
+		(string) get_post_meta( $post_id, '_igdb_slug', true ),
+		(string) get_post_meta( $post_id, '_game_release_date', true ),
+		$platforms,
+		$genres,
+		(string) get_post_meta( $post_id, '_game_developers', true ),
+		(string) get_post_meta( $post_id, '_game_publishers', true ),
+		$status,
+		$status_term,
+		(string) get_post_meta( $post_id, '_user_rating', true ),
+		(string) get_post_meta( $post_id, '_user_notes', true ),
+		(string) get_post_meta( $post_id, '_user_date_added', true ),
+		(string) get_post_meta( $post_id, '_user_date_completed', true ),
+		(string) get_post_meta( $post_id, '_user_ownership', true ),
+	);
+}
+
+/**
+ * Stream a CSV export of all game posts.
+ *
+ * @return void
+ */
+function wp_game_library_export_library_csv() {
+	$post_type = get_post_type_object( 'game' );
+
+	if ( ! $post_type || empty( $post_type->cap->edit_posts ) || ! current_user_can( $post_type->cap->edit_posts ) ) {
+		wp_die( esc_html__( 'Sorry, you are not allowed to export this library.', 'wp-game-library' ) );
+	}
+
+	check_admin_referer( 'wp_game_library_export_library_csv' );
+
+	if ( function_exists( 'set_time_limit' ) ) {
+		set_time_limit( 0 );
+	}
+
+	nocache_headers();
+	header( 'Content-Type: text/csv; charset=UTF-8' );
+	header( 'Content-Disposition: attachment; filename=wp-game-library-export-' . gmdate( 'Y-m-d-His' ) . '.csv' );
+
+	$output = fopen( 'php://output', 'w' );
+
+	if ( false === $output ) {
+		wp_die( esc_html__( 'Could not start CSV export.', 'wp-game-library' ) );
+	}
+
+	// UTF-8 BOM for better spreadsheet compatibility.
+	fwrite( $output, "\xEF\xBB\xBF" );
+
+	fputcsv(
+		$output,
+		array(
+			'post_id',
+			'title',
+			'_igdb_id',
+			'_igdb_slug',
+			'release_date',
+			'platforms',
+			'genres',
+			'developers',
+			'publishers',
+			'_user_play_status',
+			'status_term',
+			'_user_rating',
+			'_user_notes',
+			'_user_date_added',
+			'_user_date_completed',
+			'_user_ownership',
+		)
+	);
+
+	$paged    = 1;
+	$per_page = 200;
+
+	do {
+		$query = new WP_Query(
+			array(
+				'post_type'      => 'game',
+				'post_status'    => array( 'publish', 'future', 'draft', 'pending', 'private' ),
+				'posts_per_page' => $per_page,
+				'paged'          => $paged,
+				'fields'         => 'ids',
+				'orderby'        => 'ID',
+				'order'          => 'ASC',
+				'no_found_rows'  => true,
+			)
+		);
+
+		foreach ( $query->posts as $post_id ) {
+			fputcsv( $output, wp_game_library_build_export_row( (int) $post_id ) );
+		}
+
+		$exported = count( $query->posts );
+		++$paged;
+	} while ( $exported === $per_page );
+
+	fclose( $output );
+	exit;
+}
+add_action( 'admin_post_wp_game_library_export_library_csv', 'wp_game_library_export_library_csv' );
 
 // ============================================================
 // IGDB API Integration

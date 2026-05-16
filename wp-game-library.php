@@ -339,28 +339,30 @@ function wp_game_library_user_rating_options() {
  *
  * @param mixed $value Rating value.
  *
+ * @param bool  $allow_empty Whether to allow an empty result for unset values.
+ *
  * @return float|string
  */
-function wp_game_library_sanitize_user_rating( $value ) {
+function wp_game_library_sanitize_user_rating( $value, $allow_empty = true ) {
 	$raw_value = is_string( $value ) ? trim( $value ) : $value;
 
 	if ( '' === $raw_value || null === $raw_value ) {
-		return '';
+		return $allow_empty ? '' : 0.0;
 	}
 
 	if ( ! is_numeric( $raw_value ) ) {
-		return '';
+		return $allow_empty ? '' : 0.0;
 	}
 
 	$rating  = (float) $raw_value;
 	$rounded = round( $rating * 2 ) / 2;
 
 	if ( abs( $rating - $rounded ) > 0.001 ) {
-		return '';
+		return $allow_empty ? '' : 0.0;
 	}
 
 	if ( ! in_array( $rounded, wp_game_library_user_rating_options(), true ) ) {
-		return '';
+		return $allow_empty ? '' : 0.0;
 	}
 
 	return $rounded;
@@ -457,6 +459,10 @@ function wp_game_library_register_game_meta() {
 				'single'            => true,
 				'show_in_rest'      => isset( $meta_args['show_in_rest'] ) ? $meta_args['show_in_rest'] : true,
 				'sanitize_callback' => static function( $value ) use ( $meta_key ) {
+					if ( '_user_rating' === $meta_key ) {
+						return wp_game_library_sanitize_user_rating( $value, false );
+					}
+
 					return wp_game_library_sanitize_game_meta( $value, $meta_key );
 				},
 				'auth_callback'     => 'wp_game_library_auth_game_meta',
@@ -505,7 +511,12 @@ function wp_game_library_render_user_rating_meta_box( $post ) {
 		esc_html__( '— Not Set —', 'wp-game-library' )
 	);
 
+	echo '<optgroup label="' . esc_attr__( 'Star rating (1–5)', 'wp-game-library' ) . '">';
 	foreach ( wp_game_library_user_rating_options() as $rating_option ) {
+		if ( $rating_option > 5 ) {
+			continue;
+		}
+
 		$rating_label = wp_game_library_format_user_rating( $rating_option );
 
 		printf(
@@ -515,6 +526,24 @@ function wp_game_library_render_user_rating_meta_box( $post ) {
 			esc_html( $rating_label )
 		);
 	}
+	echo '</optgroup>';
+
+	echo '<optgroup label="' . esc_attr__( 'Score (6–10)', 'wp-game-library' ) . '">';
+	foreach ( wp_game_library_user_rating_options() as $rating_option ) {
+		if ( $rating_option < 6 ) {
+			continue;
+		}
+
+		$rating_label = wp_game_library_format_user_rating( $rating_option );
+
+		printf(
+			'<option value="%1$s"%2$s>%3$s</option>',
+			esc_attr( (string) $rating_option ),
+			selected( (string) $current_rating, (string) $rating_option, false ),
+			esc_html( $rating_label )
+		);
+	}
+	echo '</optgroup>';
 
 	echo '</select>';
 	echo '<p class="description">' . esc_html__( 'Choose a whole-number rating from 1 to 10, or use half-step values from 1 to 5 for star-style ratings.', 'wp-game-library' ) . '</p>';

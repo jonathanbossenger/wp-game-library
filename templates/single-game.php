@@ -80,7 +80,7 @@ $format_date_for_display = static function ( $date_value ) {
 			$release_date_display        = $format_date_for_display( $release_date );
 			$user_date_added_display     = $format_date_for_display( $user_date_added );
 			$user_date_completed_display = $format_date_for_display( $user_date_completed );
-			$user_rating_display         = function_exists( 'wp_game_library_format_user_rating' ) ? wp_game_library_format_user_rating( $user_rating ) : '';
+			$user_rating_display         = wp_game_library_format_user_rating( $user_rating );
 			?>
 			<article <?php post_class( 'wp-game-library-single-game__article' ); ?>>
 				<header class="wp-game-library-single-game__header">

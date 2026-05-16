@@ -138,7 +138,7 @@ if ( ! isset( $sort_options[ $active_sort ] ) ) {
 						<?php if ( ! empty( $status ) ) : ?>
 							<p class="wp-game-library-game-card__status"><?php echo esc_html( $status ); ?></p>
 						<?php endif; ?>
-						<?php $user_rating_display = function_exists( 'wp_game_library_format_user_rating' ) ? wp_game_library_format_user_rating( $user_rating ) : ''; ?>
+						<?php $user_rating_display = wp_game_library_format_user_rating( $user_rating ); ?>
 						<?php if ( '' !== $user_rating_display ) : ?>
 							<p class="wp-game-library-game-card__rating">
 								<?php

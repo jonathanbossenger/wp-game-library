@@ -30,6 +30,14 @@
 	 * @param {string}  doneMsg  Message to show on success.
 	 */
 	function importGame( igdbId, $btn, $status, doneMsg ) {
+		var payload = {
+			igdb_id: igdbId,
+		};
+
+		if ( wpGameLibraryIGDB.postId ) {
+			payload.post_id = wpGameLibraryIGDB.postId;
+		}
+
 		$btn.prop( 'disabled', true );
 		$status.css( 'color', '' ).text( wpGameLibraryIGDB.i18n.importing );
 		clearError();
@@ -38,15 +46,16 @@
 			url: wpGameLibraryIGDB.restUrl + '/games/import',
 			method: 'POST',
 			contentType: 'application/json',
-			data: JSON.stringify( {
-				igdb_id: igdbId,
-				post_id: wpGameLibraryIGDB.postId,
-			} ),
+			data: JSON.stringify( payload ),
 			beforeSend: function ( xhr ) {
 				xhr.setRequestHeader( 'X-WP-Nonce', wpGameLibraryIGDB.restNonce );
 			},
-			success: function () {
+			success: function ( response ) {
 				$status.css( 'color', '#00a32a' ).text( doneMsg );
+
+				if ( ! wpGameLibraryIGDB.postId && response && response.post_id ) {
+					window.location.href = wpGameLibraryIGDB.editPostUrl + response.post_id;
+				}
 			},
 			error: function ( xhr ) {
 				var msg = wpGameLibraryIGDB.i18n.errorGeneric;
@@ -146,7 +155,7 @@
 			selectedIgdbId,
 			$( this ),
 			$( '#wp-game-library-igdb-import-status' ),
-			wpGameLibraryIGDB.i18n.importDone
+			wpGameLibraryIGDB.postId ? wpGameLibraryIGDB.i18n.importDone : wpGameLibraryIGDB.i18n.addDone
 		);
 	} );
 

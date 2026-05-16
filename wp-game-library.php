@@ -240,8 +240,10 @@ function wp_game_library_sanitize_game_meta( $value, $meta_key = '', $object_typ
 			return is_numeric( $value ) ? absint( $value ) : 0;
 
 		case '_game_rating':
-		case '_user_rating':
 			return is_numeric( $value ) ? (float) $value : 0.0;
+
+		case '_user_rating':
+			return wp_game_library_sanitize_user_rating( $value );
 
 		case '_game_cover_url':
 			return esc_url_raw( $value );
@@ -312,6 +314,80 @@ function wp_game_library_sanitize_game_meta( $value, $meta_key = '', $object_typ
 }
 
 /**
+ * Return the allowed personal rating values.
+ *
+ * @return float[]
+ */
+function wp_game_library_user_rating_options() {
+	$options = array();
+
+	for ( $rating = 2; $rating <= 20; $rating++ ) {
+		$value = $rating / 2;
+
+		if ( $value > 5 && floor( $value ) !== $value ) {
+			continue;
+		}
+
+		$options[] = (float) $value;
+	}
+
+	return $options;
+}
+
+/**
+ * Sanitize the stored personal rating value.
+ *
+ * @param mixed $value Rating value.
+ *
+ * @return float|string
+ */
+function wp_game_library_sanitize_user_rating( $value ) {
+	$raw_value = is_string( $value ) ? trim( $value ) : $value;
+
+	if ( '' === $raw_value || null === $raw_value ) {
+		return '';
+	}
+
+	if ( ! is_numeric( $raw_value ) ) {
+		return '';
+	}
+
+	$rating  = (float) $raw_value;
+	$rounded = round( $rating * 2 ) / 2;
+
+	if ( abs( $rating - $rounded ) > 0.001 ) {
+		return '';
+	}
+
+	if ( ! in_array( $rounded, wp_game_library_user_rating_options(), true ) ) {
+		return '';
+	}
+
+	return $rounded;
+}
+
+/**
+ * Format the personal rating for display.
+ *
+ * @param mixed $value Rating value.
+ *
+ * @return string
+ */
+function wp_game_library_format_user_rating( $value ) {
+	$rating = wp_game_library_sanitize_user_rating( $value );
+
+	if ( '' === $rating ) {
+		return '';
+	}
+
+	if ( (float) (int) $rating === (float) $rating ) {
+		return number_format_i18n( (int) $rating, 0 );
+	}
+
+	return number_format_i18n( (float) $rating, 1 );
+}
+
+/**
  * Authorize updates to game meta values.
  *
  * @param bool   $allowed  Whether the user can add the meta.
@@ -357,7 +433,15 @@ function wp_game_library_register_game_meta() {
 		'_game_genres'         => array( 'type' => 'string' ),
 		'_game_screenshots'    => array( 'type' => 'string' ),
 		'_user_play_status'    => array( 'type' => 'string' ),
-		'_user_rating'         => array( 'type' => 'number' ),
+		'_user_rating'         => array(
+			'type'         => 'number',
+			'show_in_rest' => array(
+				'schema' => array(
+					'type' => 'number',
+					'enum' => wp_game_library_user_rating_options(),
+				),
+			),
+		),
 		'_user_notes'          => array( 'type' => 'string' ),
 		'_user_date_added'     => array( 'type' => 'string' ),
 		'_user_date_completed' => array( 'type' => 'string' ),
@@ -371,7 +455,7 @@ function wp_game_library_register_game_meta() {
 			array(
 				'type'              => $meta_args['type'],
 				'single'            => true,
-				'show_in_rest'      => true,
+				'show_in_rest'      => isset( $meta_args['show_in_rest'] ) ? $meta_args['show_in_rest'] : true,
 				'sanitize_callback' => static function( $value ) use ( $meta_key ) {
 					return wp_game_library_sanitize_game_meta( $value, $meta_key );
 				},
@@ -383,8 +467,101 @@ function wp_game_library_register_game_meta() {
 add_action( 'init', 'wp_game_library_register_game_meta' );
 
 // ============================================================
-// Play Status: Admin Meta Box & Bidirectional Sync
+// Play Status & Personal Rating: Admin Meta Boxes
 // ============================================================
+
+/**
+ * Register the Personal Rating meta box on the game edit screen.
+ *
+ * @return void
+ */
+function wp_game_library_add_user_rating_meta_box() {
+	add_meta_box(
+		'wp-game-library-user-rating',
+		__( 'Personal Rating', 'wp-game-library' ),
+		'wp_game_library_render_user_rating_meta_box',
+		'game',
+		'side',
+		'default'
+	);
+}
+add_action( 'add_meta_boxes', 'wp_game_library_add_user_rating_meta_box' );
+
+/**
+ * Render the Personal Rating meta box.
+ *
+ * @param WP_Post $post Current post object.
+ *
+ * @return void
+ */
+function wp_game_library_render_user_rating_meta_box( $post ) {
+	$current_rating = wp_game_library_sanitize_user_rating( get_post_meta( $post->ID, '_user_rating', true ) );
+
+	wp_nonce_field( 'wp_game_library_save_user_rating', 'wp_game_library_user_rating_nonce' );
+
+	echo '<select id="wp-game-library-user-rating" name="wp_game_library_user_rating" style="width:100%;">';
+	printf(
+		'<option value="">%s</option>',
+		esc_html__( '— Not Set —', 'wp-game-library' )
+	);
+
+	foreach ( wp_game_library_user_rating_options() as $rating_option ) {
+		$rating_label = wp_game_library_format_user_rating( $rating_option );
+
+		printf(
+			'<option value="%1$s"%2$s>%3$s</option>',
+			esc_attr( (string) $rating_option ),
+			selected( (string) $current_rating, (string) $rating_option, false ),
+			esc_html( $rating_label )
+		);
+	}
+
+	echo '</select>';
+	echo '<p class="description">' . esc_html__( 'Choose a whole-number rating from 1 to 10, or use half-step values from 1 to 5 for star-style ratings.', 'wp-game-library' ) . '</p>';
+}
+
+/**
+ * Save the Personal Rating meta box value.
+ *
+ * @param int $post_id Post ID.
+ *
+ * @return void
+ */
+function wp_game_library_save_user_rating_meta_box( $post_id ) {
+	if ( ! isset( $_POST['wp_game_library_user_rating_nonce'] ) ) {
+		return;
+	}
+
+	if ( ! wp_verify_nonce( sanitize_key( $_POST['wp_game_library_user_rating_nonce'] ), 'wp_game_library_save_user_rating' ) ) {
+		return;
+	}
+
+	if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
+		return;
+	}
+
+	if ( ! current_user_can( 'edit_post', $post_id ) ) {
+		return;
+	}
+
+	$raw_rating = isset( $_POST['wp_game_library_user_rating'] )
+		? trim( (string) wp_unslash( $_POST['wp_game_library_user_rating'] ) )
+		: '';
+
+	if ( '' === $raw_rating ) {
+		delete_post_meta( $post_id, '_user_rating' );
+		return;
+	}
+
+	$rating = wp_game_library_sanitize_user_rating( $raw_rating );
+
+	if ( '' === $rating ) {
+		return;
+	}
+
+	update_post_meta( $post_id, '_user_rating', $rating );
+}
+add_action( 'save_post_game', 'wp_game_library_save_user_rating_meta_box' );
 
 /**
  * Canonical play status values.
@@ -1548,6 +1725,7 @@ function wp_game_library_render_game_card_block( $attributes, $content ) {
 	$summary   = get_post_meta( $post_id, '_game_summary', true );
 	$status    = get_post_meta( $post_id, '_user_play_status', true );
 	$rating    = get_post_meta( $post_id, '_user_rating', true );
+	$rating_display = wp_game_library_format_user_rating( $rating );
 
 	$platform_names = wp_get_post_terms( $post_id, 'game_platform', array( 'fields' => 'names' ) );
 	$platforms      = ! is_wp_error( $platform_names ) ? implode( ', ', $platform_names ) : '';
@@ -1580,13 +1758,13 @@ function wp_game_library_render_game_card_block( $attributes, $content ) {
 			<?php if ( ! empty( $status ) ) : ?>
 			<p class="wp-game-library-game-card__status"><?php echo esc_html( $status ); ?></p>
 			<?php endif; ?>
-			<?php if ( '' !== $rating && null !== $rating ) : ?>
+			<?php if ( '' !== $rating_display ) : ?>
 			<p class="wp-game-library-game-card__rating">
 				<?php
 				printf(
 					/* translators: %s: User rating */
 					esc_html__( 'User rating: %s', 'wp-game-library' ),
-					esc_html( number_format_i18n( (float) $rating, 1 ) )
+					esc_html( $rating_display )
 				);
 				?>
 			</p>

@@ -105,12 +105,12 @@ if ( ! isset( $sort_options[ $active_sort ] ) ) {
 			while ( have_posts() ) :
 				the_post();
 
-				$post_id    = get_the_ID();
-				$title      = get_the_title();
-				$cover_url  = wp_game_library_get_archive_cover_image_url( get_post_meta( $post_id, '_game_cover_url', true ) );
-				$summary    = get_post_meta( $post_id, '_game_summary', true );
+				$post_id     = get_the_ID();
+				$title       = get_the_title();
+				$cover_url   = wp_game_library_get_archive_cover_image_url( get_post_meta( $post_id, '_game_cover_url', true ) );
+				$summary     = get_post_meta( $post_id, '_game_summary', true );
 				$user_rating = get_post_meta( $post_id, '_user_rating', true );
-				$status     = '';
+				$status      = '';
 
 				$platform_names = wp_get_post_terms( $post_id, 'game_platform', array( 'fields' => 'names' ) );
 				$platforms      = ! is_wp_error( $platform_names ) ? implode( ', ', $platform_names ) : '';
@@ -138,13 +138,14 @@ if ( ! isset( $sort_options[ $active_sort ] ) ) {
 						<?php if ( ! empty( $status ) ) : ?>
 							<p class="wp-game-library-game-card__status"><?php echo esc_html( $status ); ?></p>
 						<?php endif; ?>
-						<?php if ( '' !== $user_rating && null !== $user_rating ) : ?>
+						<?php $user_rating_display = function_exists( 'wp_game_library_format_user_rating' ) ? wp_game_library_format_user_rating( $user_rating ) : ''; ?>
+						<?php if ( '' !== $user_rating_display ) : ?>
 							<p class="wp-game-library-game-card__rating">
 								<?php
 								printf(
 									/* translators: %s: User rating value. */
 									esc_html__( 'User rating: %s', 'wp-game-library' ),
-									esc_html( number_format_i18n( (float) $user_rating, 1 ) )
+									esc_html( $user_rating_display )
 								);
 								?>
 							</p>

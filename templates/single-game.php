@@ -80,6 +80,7 @@ $format_date_for_display = static function ( $date_value ) {
 			$release_date_display        = $format_date_for_display( $release_date );
 			$user_date_added_display     = $format_date_for_display( $user_date_added );
 			$user_date_completed_display = $format_date_for_display( $user_date_completed );
+			$user_rating_display         = wp_game_library_format_user_rating( $user_rating );
 			?>
 			<article <?php post_class( 'wp-game-library-single-game__article' ); ?>>
 				<header class="wp-game-library-single-game__header">
@@ -134,9 +135,9 @@ $format_date_for_display = static function ( $date_value ) {
 									<dt><?php esc_html_e( 'Play status', 'wp-game-library' ); ?></dt>
 									<dd><?php echo esc_html( $play_status ); ?></dd>
 								<?php endif; ?>
-								<?php if ( '' !== $user_rating && null !== $user_rating ) : ?>
+								<?php if ( '' !== $user_rating_display ) : ?>
 									<dt><?php esc_html_e( 'Personal rating', 'wp-game-library' ); ?></dt>
-									<dd><?php echo esc_html( number_format_i18n( (float) $user_rating, 1 ) ); ?></dd>
+									<dd><?php echo esc_html( $user_rating_display ); ?></dd>
 								<?php endif; ?>
 								<?php if ( ! empty( $user_ownership ) ) : ?>
 									<dt><?php esc_html_e( 'Ownership', 'wp-game-library' ); ?></dt>

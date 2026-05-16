@@ -383,6 +383,215 @@ function wp_game_library_register_game_meta() {
 add_action( 'init', 'wp_game_library_register_game_meta' );
 
 // ============================================================
+// Play Status: Admin Meta Box & Bidirectional Sync
+// ============================================================
+
+/**
+ * Canonical play status values.
+ *
+ * @return string[]
+ */
+function wp_game_library_play_status_options() {
+	return array(
+		'Unplayed',
+		'Started',
+		'Finished',
+		'Abandoned',
+		'Evergreen',
+		'Wishlist',
+	);
+}
+
+/**
+ * Register the Play Status meta box on the game edit screen.
+ *
+ * The default non-hierarchical tag-style metabox for game_status is removed
+ * and replaced by this dedicated dropdown so that only canonical values can
+ * be selected and the UI stays consistent with the block editor sidebar.
+ *
+ * @return void
+ */
+function wp_game_library_add_play_status_meta_box() {
+	remove_meta_box( 'tagsdiv-game_status', 'game', 'side' );
+
+	add_meta_box(
+		'wp-game-library-play-status',
+		__( 'Play Status', 'wp-game-library' ),
+		'wp_game_library_render_play_status_meta_box',
+		'game',
+		'side',
+		'default'
+	);
+}
+add_action( 'add_meta_boxes', 'wp_game_library_add_play_status_meta_box' );
+
+/**
+ * Render the Play Status meta box dropdown.
+ *
+ * The dropdown is pre-populated from the game_status taxonomy (canonical source).
+ *
+ * @param WP_Post $post Current post object.
+ *
+ * @return void
+ */
+function wp_game_library_render_play_status_meta_box( $post ) {
+	wp_nonce_field( 'wp_game_library_save_play_status', 'wp_game_library_play_status_nonce' );
+
+	$status_terms   = wp_get_post_terms( $post->ID, 'game_status', array( 'fields' => 'names' ) );
+	$current_status = ( ! is_wp_error( $status_terms ) && ! empty( $status_terms ) ) ? $status_terms[0] : '';
+
+	if ( '' === $current_status ) {
+		$current_status = (string) get_post_meta( $post->ID, '_user_play_status', true );
+	}
+
+	echo '<select id="wp-game-library-play-status" name="wp_game_library_play_status" style="width:100%;">';
+	printf(
+		'<option value="">%s</option>',
+		esc_html__( '— Not Set —', 'wp-game-library' )
+	);
+	foreach ( wp_game_library_play_status_options() as $status ) {
+		printf(
+			'<option value="%s"%s>%s</option>',
+			esc_attr( $status ),
+			selected( $current_status, $status, false ),
+			esc_html( $status )
+		);
+	}
+	echo '</select>';
+}
+
+/**
+ * Save the Play Status meta box value.
+ *
+ * Updates the game_status taxonomy term; the sync hook keeps
+ * _user_play_status meta in step automatically.
+ *
+ * @param int $post_id Post ID.
+ *
+ * @return void
+ */
+function wp_game_library_save_play_status_meta_box( $post_id ) {
+	if ( ! isset( $_POST['wp_game_library_play_status_nonce'] ) ) {
+		return;
+	}
+
+	if ( ! wp_verify_nonce( sanitize_key( $_POST['wp_game_library_play_status_nonce'] ), 'wp_game_library_save_play_status' ) ) {
+		return;
+	}
+
+	if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
+		return;
+	}
+
+	if ( ! current_user_can( 'edit_post', $post_id ) ) {
+		return;
+	}
+
+	$new_status = isset( $_POST['wp_game_library_play_status'] )
+		? sanitize_text_field( wp_unslash( $_POST['wp_game_library_play_status'] ) )
+		: '';
+
+	$allowed = wp_game_library_play_status_options();
+
+	if ( '' === $new_status ) {
+		wp_set_object_terms( $post_id, array(), 'game_status' );
+		return;
+	}
+
+	if ( ! in_array( $new_status, $allowed, true ) ) {
+		return;
+	}
+
+	$term = get_term_by( 'name', $new_status, 'game_status' );
+	if ( $term && ! is_wp_error( $term ) ) {
+		wp_set_object_terms( $post_id, array( $term->term_id ), 'game_status' );
+	}
+}
+add_action( 'save_post_game', 'wp_game_library_save_play_status_meta_box' );
+
+/**
+ * Sync game_status taxonomy changes to the _user_play_status post meta.
+ *
+ * Fires after set_object_terms. When the game_status taxonomy term changes
+ * (e.g. via the block editor taxonomy panel), this keeps the meta value in sync.
+ *
+ * @param int    $object_id Object ID.
+ * @param array  $terms     Array of object terms (IDs or names).
+ * @param array  $tt_ids    Array of term taxonomy IDs.
+ * @param string $taxonomy  Taxonomy slug.
+ * @param bool   $append    Whether terms were appended or replaced.
+ * @param array  $old_tt_ids Old array of term taxonomy IDs.
+ *
+ * @return void
+ */
+function wp_game_library_sync_game_status_to_meta( $object_id, $terms, $tt_ids, $taxonomy, $append, $old_tt_ids ) {
+	if ( 'game_status' !== $taxonomy || 'game' !== get_post_type( $object_id ) ) {
+		return;
+	}
+
+	$status_terms = wp_get_object_terms( $object_id, 'game_status', array( 'fields' => 'names' ) );
+	$new_status   = ( ! is_wp_error( $status_terms ) && ! empty( $status_terms ) ) ? (string) $status_terms[0] : '';
+	$current_meta = (string) get_post_meta( $object_id, '_user_play_status', true );
+
+	if ( $current_meta === $new_status ) {
+		return;
+	}
+
+	// Detach the reverse sync temporarily to avoid triggering it while updating meta.
+	remove_action( 'updated_post_meta', 'wp_game_library_sync_meta_to_game_status', 10 );
+	remove_action( 'added_post_meta', 'wp_game_library_sync_meta_to_game_status', 10 );
+
+	update_post_meta( $object_id, '_user_play_status', $new_status );
+
+	add_action( 'updated_post_meta', 'wp_game_library_sync_meta_to_game_status', 10, 4 );
+	add_action( 'added_post_meta', 'wp_game_library_sync_meta_to_game_status', 10, 4 );
+}
+add_action( 'set_object_terms', 'wp_game_library_sync_game_status_to_meta', 10, 6 );
+
+/**
+ * Sync _user_play_status meta changes to the game_status taxonomy.
+ *
+ * Fires after updated_post_meta / added_post_meta. When the meta value is
+ * updated directly (e.g. via the REST API in a block-driven flow), this keeps
+ * the canonical game_status taxonomy term in step.
+ *
+ * @param int    $meta_id    ID of the meta entry.
+ * @param int    $object_id  Post ID.
+ * @param string $meta_key   Meta key.
+ * @param mixed  $meta_value New meta value.
+ *
+ * @return void
+ */
+function wp_game_library_sync_meta_to_game_status( $meta_id, $object_id, $meta_key, $meta_value ) {
+	if ( '_user_play_status' !== $meta_key || 'game' !== get_post_type( $object_id ) ) {
+		return;
+	}
+
+	$status_terms      = wp_get_object_terms( $object_id, 'game_status', array( 'fields' => 'names' ) );
+	$current_term_name = ( ! is_wp_error( $status_terms ) && ! empty( $status_terms ) ) ? (string) $status_terms[0] : '';
+
+	if ( $current_term_name === (string) $meta_value ) {
+		return;
+	}
+
+	// Detach the reverse sync temporarily to avoid triggering it while updating terms.
+	remove_action( 'set_object_terms', 'wp_game_library_sync_game_status_to_meta', 10 );
+
+	if ( '' === (string) $meta_value ) {
+		wp_set_object_terms( $object_id, array(), 'game_status' );
+	} else {
+		$term = get_term_by( 'name', (string) $meta_value, 'game_status' );
+		if ( $term && ! is_wp_error( $term ) ) {
+			wp_set_object_terms( $object_id, array( $term->term_id ), 'game_status' );
+		}
+	}
+
+	add_action( 'set_object_terms', 'wp_game_library_sync_game_status_to_meta', 10, 6 );
+}
+add_action( 'updated_post_meta', 'wp_game_library_sync_meta_to_game_status', 10, 4 );
+add_action( 'added_post_meta', 'wp_game_library_sync_meta_to_game_status', 10, 4 );
+
+// ============================================================
 // Settings Page
 // ============================================================
 

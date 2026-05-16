@@ -547,7 +547,11 @@ function wp_game_library_sync_game_status_to_meta( $object_id, $terms, $tt_ids, 
 	remove_action( 'updated_post_meta', 'wp_game_library_sync_meta_to_game_status', 10 );
 	remove_action( 'added_post_meta', 'wp_game_library_sync_meta_to_game_status', 10 );
 
-	update_post_meta( $object_id, '_user_play_status', $new_status );
+	if ( '' === $new_status ) {
+		delete_post_meta( $object_id, '_user_play_status' );
+	} else {
+		update_post_meta( $object_id, '_user_play_status', $new_status );
+	}
 
 	add_action( 'updated_post_meta', 'wp_game_library_sync_meta_to_game_status', 10, 4 );
 	add_action( 'added_post_meta', 'wp_game_library_sync_meta_to_game_status', 10, 4 );
@@ -577,6 +581,11 @@ function wp_game_library_sync_meta_to_game_status( $meta_id, $object_id, $meta_k
 	$current_term_name = ( ! is_wp_error( $status_terms ) && ! empty( $status_terms ) ) ? (string) $status_terms[0] : '';
 
 	if ( $current_term_name === (string) $meta_value ) {
+		return;
+	}
+
+	// Reject values not in the canonical whitelist to prevent rogue taxonomy terms.
+	if ( '' !== (string) $meta_value && ! in_array( (string) $meta_value, wp_game_library_play_status_options(), true ) ) {
 		return;
 	}
 

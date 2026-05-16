@@ -1035,6 +1035,45 @@ function wp_game_library_render_settings_page() {
 }
 
 /**
+ * Normalize CSV export list-like meta values.
+ *
+ * Accepts plain strings or JSON-encoded arrays.
+ *
+ * @param mixed $value Raw meta value.
+ *
+ * @return string
+ */
+function wp_game_library_normalize_export_list_value( $value ) {
+	$raw = trim( (string) $value );
+
+	if ( '' === $raw ) {
+		return '';
+	}
+
+	$decoded = json_decode( $raw, true );
+	if ( is_array( $decoded ) ) {
+		$items = array();
+
+		foreach ( $decoded as $entry ) {
+			if ( ! is_scalar( $entry ) ) {
+				continue;
+			}
+
+			$item = trim( (string) $entry );
+			if ( '' !== $item ) {
+				$items[] = $item;
+			}
+		}
+
+		if ( ! empty( $items ) ) {
+			return implode( ', ', $items );
+		}
+	}
+
+	return $raw;
+}
+
+/**
  * Build a single CSV row for a game post.
  *
  * @param int $post_id Game post ID.
@@ -1059,6 +1098,9 @@ function wp_game_library_build_export_row( $post_id ) {
 		$status = $status_term;
 	}
 
+	$developers = wp_game_library_normalize_export_list_value( get_post_meta( $post_id, '_game_developers', true ) );
+	$publishers = wp_game_library_normalize_export_list_value( get_post_meta( $post_id, '_game_publishers', true ) );
+
 	return array(
 		(string) $post_id,
 		wp_strip_all_tags( get_the_title( $post_id ) ),
@@ -1067,8 +1109,8 @@ function wp_game_library_build_export_row( $post_id ) {
 		(string) get_post_meta( $post_id, '_game_release_date', true ),
 		$platforms,
 		$genres,
-		(string) get_post_meta( $post_id, '_game_developers', true ),
-		(string) get_post_meta( $post_id, '_game_publishers', true ),
+		$developers,
+		$publishers,
 		$status,
 		$status_term,
 		(string) get_post_meta( $post_id, '_user_rating', true ),
@@ -1095,6 +1137,10 @@ function wp_game_library_export_library_csv() {
 
 	if ( function_exists( 'set_time_limit' ) ) {
 		set_time_limit( 0 );
+	}
+
+	while ( ob_get_level() > 0 ) {
+		ob_end_clean();
 	}
 
 	nocache_headers();

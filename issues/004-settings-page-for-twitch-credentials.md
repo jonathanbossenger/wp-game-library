@@ -19,5 +19,5 @@ IGDB access requires Twitch credentials configured by site admins.
 - [ ] Saved credentials are consumed by the IGDB integration layer
 
 ## Reference
-- `readme.md` → **Section 5.2: IGDB API Integration**
-- `readme.md` → **Section 6: Phase 1 (MVP)**
+- `planning.md` → **Section 5.2: IGDB API Integration**
+- `planning.md` → **Section 6: Phase 1 (MVP)**

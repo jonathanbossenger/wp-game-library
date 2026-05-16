@@ -21,5 +21,5 @@ Personal ratings are part of the MVP feature set and game card display.
 - [ ] Rating appears in game card and single game displays
 
 ## Reference
-- `readme.md` → **Section 5.1: Data Model**
-- `readme.md` → **Section 6: Phase 1 (MVP)**
+- `planning.md` → **Section 5.1: Data Model**
+- `planning.md` → **Section 6: Phase 1 (MVP)**

@@ -23,5 +23,5 @@ The MVP requires a browsable list of all games in the collection.
 - [ ] A clear empty state is shown when no games exist
 
 ## Reference
-- `readme.md` → **Section 5.4: Library Views**
-- `readme.md` → **Section 6: Phase 1 (MVP)**
+- `planning.md` → **Section 5.4: Library Views**
+- `planning.md` → **Section 6: Phase 1 (MVP)**

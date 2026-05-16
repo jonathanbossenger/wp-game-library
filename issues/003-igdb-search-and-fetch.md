@@ -23,5 +23,5 @@ IGDB is the primary external data source for game discovery and enrichment.
 - [ ] API calls enforce/respect the free-tier rate limit target of 4 requests/second
 
 ## Reference
-- `readme.md` → **Section 5.2: IGDB API Integration**
-- `readme.md` → **Section 6: Phase 1 (MVP)**
+- `planning.md` → **Section 5.2: IGDB API Integration**
+- `planning.md` → **Section 6: Phase 1 (MVP)**

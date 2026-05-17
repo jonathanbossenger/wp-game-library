@@ -6,6 +6,18 @@
 	var selectedGameName = '';
 
 	/**
+	 * Convert a localized value into a positive integer, or 0 when invalid.
+	 *
+	 * @param {*} value Value to normalize.
+	 * @return {number} Positive integer or 0.
+	 */
+	function getPositiveInt( value ) {
+		var parsed = parseInt( value, 10 );
+
+		return parsed > 0 ? parsed : 0;
+	}
+
+	/**
 	 * Show an error message in the meta box.
 	 *
 	 * @param {string} msg Error message text.
@@ -30,12 +42,13 @@
 	 * @param {string}  doneMsg  Message to show on success.
 	 */
 	function importGame( igdbId, $btn, $status, doneMsg ) {
+		var postId = getPositiveInt( wpGameLibraryIGDB.postId );
 		var payload = {
-			igdb_id: igdbId,
+			igdb_id: getPositiveInt( igdbId ),
 		};
 
-		if ( wpGameLibraryIGDB.postId ) {
-			payload.post_id = wpGameLibraryIGDB.postId;
+		if ( postId ) {
+			payload.post_id = postId;
 		}
 
 		$btn.prop( 'disabled', true );
@@ -53,7 +66,7 @@
 			success: function ( response ) {
 				$status.css( 'color', '#00a32a' ).text( doneMsg );
 
-				if ( ! wpGameLibraryIGDB.postId && response && response.post_id ) {
+				if ( ! postId && response && response.post_id ) {
 					window.location.href = wpGameLibraryIGDB.editPostUrl + response.post_id;
 				}
 			},
@@ -161,7 +174,7 @@
 
 	// Refresh from IGDB (for games that already have an IGDB ID).
 	$( document ).on( 'click', '#wp-game-library-igdb-refresh-btn', function () {
-		var igdbId = wpGameLibraryIGDB.igdbId;
+		var igdbId = getPositiveInt( wpGameLibraryIGDB.igdbId );
 		if ( ! igdbId ) {
 			return;
 		}
